@@ -463,9 +463,19 @@ const D = {
       this.wallet.push({id:uid(), user_id:t.primary_cleaner, task_id:t.id, kind:'task', amount:t.cleaner_pay, created_at:t.approved_at});
       if (t.referral_fee) this.wallet.push({id:uid(), user_id:'c1', task_id:t.id, kind:'referral', amount:t.referral_fee, source_cleaner:t.primary_cleaner, created_at:t.approved_at});
     });
-    this.settings = {id:1, referral_fee:10, urgent_surcharge:80, pool_delay_hours:3, deposit_amount:1500};
+    const lm = addDays(td.slice(0,8) + '01', -5) + 'T12:00:00Z';
+    [['c1','task',3850],['c1','referral',420],['c2','task',300],['c2','referral',4300],['c3','task',2600],['c4','task',1900]].forEach(([u,k,a]) => this.wallet.push({id:uid(), user_id:u, kind:k, amount:a, created_at:lm}));
+    this.payouts = [];
+    this.settings = {id:1, referral_fee:10, urgent_surcharge:80, pool_delay_hours:3, deposit_amount:1500, referral_cap_ratio:0, referral_monthly_cap:0, referral_months:0};
   },
   me(){ return this.profiles.find(p => p.id === ({admin:'a1', cleaner:'c1', host:'h1', new:'n1'})[this.cur]); },
+  calc(uid, ym){
+    const s = this.settings, mine = this.wallet.filter(w => w.user_id === uid && w.created_at.slice(0,7) === ym);
+    const t = mine.filter(w => w.kind !== 'referral').reduce((x, w) => x + +w.amount, 0), r = mine.filter(w => w.kind === 'referral').reduce((x, w) => x + +w.amount, 0);
+    const capN = Math.min(s.referral_cap_ratio > 0 ? t * s.referral_cap_ratio : Infinity, s.referral_monthly_cap > 0 ? s.referral_monthly_cap : Infinity), paid = t > 0 ? Math.min(r, capN) : 0;
+    const cap = capN === Infinity ? null : capN;
+    return {task_amount:t, referral_earned:r, cap, referral_paid:paid, referral_forfeited:r - paid, total:t + paid, unlocked:t > 0};
+  },
   prof(id){ return this.profiles.find(p => p.id === id); },
   join(t){
     if (!t) return t;
@@ -504,7 +514,8 @@ const D = {
         const ms = today().slice(0,7);
         const mine = this.wallet.filter(w => w.user_id === me.id && w.created_at.slice(0,7) === ms);
         const own = this.tasks.filter(x => x.primary_cleaner === me.id && x.status === 'approved' && (x.approved_at || '').slice(0,7) === ms).length;
-        return {task_total:mine.filter(w => w.kind !== 'referral').reduce((s2, w) => s2 + +w.amount, 0), referral_total:mine.filter(w => w.kind === 'referral').reduce((s2, w) => s2 + +w.amount, 0), referral_count:mine.filter(w => w.kind === 'referral').length, own_cleanings:own, unlocked:own >= 1, pending_review:this.tasks.filter(x => x.primary_cleaner === me.id && x.status === 'submitted').length * 150};
+        const c = this.calc(me.id, ms);
+        return {task_total:c.task_amount, referral_total:c.referral_earned, referral_payable:c.referral_paid, referral_forfeited:c.referral_forfeited, referral_cap:c.cap, cap_ratio:s.referral_cap_ratio, monthly_cap:s.referral_monthly_cap, referral_months:s.referral_months, total:c.total, referral_count:mine.filter(w => w.kind === 'referral').length, own_cleanings:own, unlocked:c.unlocked, pending_review:this.tasks.filter(x => x.primary_cleaner === me.id && x.status === 'submitted').length * 150};
       }
       case 'my_referrals':
         return this.profiles.filter(p => p.referred_by === me.id).map(p => ({first_name:first(p.full_name), joined:p.created_at.slice(0,10), approved_this_month:this.tasks.filter(x => x.primary_cleaner === p.id && x.status === 'approved').length, active:p.status === 'approved'}));
@@ -512,6 +523,17 @@ const D = {
         const ap = this.apartments.find(x => x.id === a.p_apartment);
         this.tasks.push({id:uid(), apartment_id:ap.id, task_date:a.p_date, window_start:'11:00', window_end:'15:00', status:'requested', is_urgent:a.p_urgent, is_extra:true, requested_by:me.id, request_note:a.p_note, host_price:ap.host_price + (a.p_urgent ? s.urgent_surcharge : 0), before_photos:[], photos:{}, published_at:nowIso(), referral_fee:0}); return; }
       case 'request_deposit_track': me.deposit_status = 'requested'; return;
+      case 'payout_preview': {
+        const ym = a.p_month.slice(0,7);
+        return this.profiles.map(p => { const c = this.calc(p.id, ym); const po = this.payouts.find(x => x.user_id === p.id && x.period.slice(0,7) === ym);
+          return {user_id:p.id, full_name:p.full_name, phone:p.phone, is_verified:p.is_verified, ...c, payout_id:po?.id || null, payout_status:po?.status || null, reference:po?.reference || null}; })
+          .filter(x => x.task_amount > 0 || x.referral_earned > 0 || x.payout_id).sort((x, y) => y.total - x.total); }
+      case 'create_payouts': {
+        if (a.p_month.slice(0,7) >= today().slice(0,7)) err('אפשר להפיק תשלומים רק לחודש שהסתיים');
+        const rows = this.rpc('payout_preview', a).filter(x => !x.payout_id && x.total > 0);
+        rows.forEach(x => this.payouts.push({id:uid(), user_id:x.user_id, period:a.p_month.slice(0,7) + '-01', task_amount:x.task_amount, referral_earned:x.referral_earned, referral_paid:x.referral_paid, referral_forfeited:x.referral_forfeited, total:x.total, status:'pending', created_at:nowIso()}));
+        return rows.length; }
+      case 'mark_payout_paid': { const po = this.payouts.find(x => x.id === a.p_payout); if (!po || po.status === 'paid') err('התשלום כבר סומן או לא קיים'); Object.assign(po, {status:'paid', reference:a.p_reference, paid_at:nowIso()}); return; }
       case 'submit_onboarding':
         Object.assign(me, {desired_role:a.p_desired_role, full_name:a.p_full_name, phone:a.p_phone, onboarding:a.p_answers, business_type:a.p_business_type, business_number:a.p_business_number, id_doc_path:a.p_id_doc_path, business_doc_path:a.p_business_doc_path, status:'submitted'}); return;
       case 'admin_review_user': { const p = this.prof(a.p_user); p.status = a.p_approve ? 'approved' : 'rejected'; if (a.p_approve) p.role = a.p_role || p.desired_role; p.rejection_reason = a.p_reason; return; }
@@ -569,6 +591,10 @@ const api = {
     return aps.map(a => ({...a, secret:secs.find(s => s.apartment_id === a.id) || {}}));
   },
   async settings(){ return DEMO ? D.settings : q(sb.from('settings').select('*').eq('id', 1).single()); },
+  async myPayouts(){
+    if (DEMO) return D.payouts.filter(x => x.user_id === S.profile.id).sort((a, b) => b.period.localeCompare(a.period));
+    return q(sb.from('payouts').select('*').eq('user_id', S.profile.id).order('period', {ascending:false}).limit(12));
+  },
   async hostData(){
     const from = addDays(today(), -14), to = addDays(today(), 30);
     if (DEMO) {
@@ -820,11 +846,11 @@ V.onboarding = {
 V.cleaner = {
   async load(){
     S.tab.c ??= 'today';
-    const [tasks, wallet, refs, pool, entries, settings, me] = await Promise.all([
-      api.cleanerTasks(), api.rpc('my_wallet'), api.rpc('my_referrals'), api.rpc('open_pool'), api.walletEntries(), api.settings(), api.me()
+    const [tasks, wallet, refs, pool, entries, settings, me, payouts] = await Promise.all([
+      api.cleanerTasks(), api.rpc('my_wallet'), api.rpc('my_referrals'), api.rpc('open_pool'), api.walletEntries(), api.settings(), api.me(), api.myPayouts()
     ]);
     S.profile = me;
-    Object.assign(S.data, {tasks, wallet, refs, pool, entries, settings});
+    Object.assign(S.data, {tasks, wallet, refs, pool, entries, settings, payouts});
   },
   html(){
     const d = S.data, t = S.taskId && d.tasks.find(x => x.id === S.taskId);
@@ -839,7 +865,7 @@ V.cleaner = {
     const open = todays.filter(t => t.status !== 'approved');
     const doneN = todays.length - open.length;
     const later = d.tasks.filter(t => t.task_date > td);
-    const total = +w.task_total + (w.unlocked ? +w.referral_total : 0);
+    const total = +w.total;
     const icon = s => ['approved'].includes(s) ? `<span class="ic lime">${ICON.check}</span>` : ['arrived','in_progress','submitted','needs_fix'].includes(s) ? `<span class="ic orange">${ICON.broom}</span>` : `<span class="ic">${ICON.key}</span>`;
     const row = t => { const a = t.apartment || {}; const backup = t.backup_cleaner === p.id;
       return `<li><button class="rowi" data-act="openTask" data-id="${t.id}">${icon(t.status)}
@@ -859,8 +885,8 @@ V.cleaner = {
       <div class="grid-cards two" style="margin-top:12px">
         <section class="card lime" style="padding:16px">
           <span class="lbl-s" style="color:rgba(31,59,23,.7)">עמלות שותפים</span>
-          <div class="num" style="font-size:26px;font-weight:600;margin-top:4px">${money(w.referral_total)}</div>
-          <span class="delta" style="margin-top:8px">${w.unlocked ? 'פתוח החודש' : 'נעול החודש'}</span>
+          <div class="num" style="font-size:26px;font-weight:600;margin-top:4px">${money(w.referral_payable)}</div>
+          <span class="delta" style="margin-top:8px">${!w.unlocked ? 'נעול החודש' : +w.referral_forfeited > 0 ? 'הגעת לתקרה' : 'פתוח החודש'}</span>
         </section>
         <section class="card" style="padding:16px">
           <span class="lbl-s">ממתין לאישור</span>
@@ -940,32 +966,37 @@ V.cleaner = {
   },
   wallet(){
     const w = S.data.wallet, s = S.data.settings, seg = S.walletSeg;
-    const total = +w.task_total + (w.unlocked ? +w.referral_total : 0);
+    const total = +w.total, pct = Math.round(+w.cap_ratio * 100), hasCap = w.referral_cap != null;
     const link = location.origin + location.pathname + '?ref=' + S.profile.referral_code;
-    const refs = S.data.refs;
+    const refs = S.data.refs, pays = S.data.payouts || [];
+    const capNote = hasCap ? `העמלות מוגבלות החודש ל-${money(w.referral_cap)}.` : 'אין תקרה לעמלות: כל עמלה שצברת משולמת.';
     return `<div class="seg" role="group"><button aria-pressed="${seg === 'earn'}" data-act="seg" data-v="earn">הכנסות</button><button aria-pressed="${seg === 'ref'}" data-act="seg" data-v="ref">חבר מביא חבר</button></div>
       ${seg === 'earn' ? `<section class="card">
-          <div class="row between"><span class="lbl-s">יתרה החודש</span><span class="tag">${monthName(today().slice(0,7))}</span></div>
+          <div class="row between"><span class="lbl-s">לתשלום על החודש</span><span class="tag">${monthName(today().slice(0,7))}</span></div>
           <div class="big num" style="margin:6px 0 14px">${money(total)}</div>
           <div class="lbl-s" style="margin-bottom:6px">ניקיונות ${money(w.task_total)}</div>
           <div class="bar"><i style="width:${total ? w.task_total / total * 100 : 0}%"></i></div>
-          <div class="lbl-s" style="margin:12px 0 6px">עמלות שותפים ${money(w.referral_total)}${w.unlocked ? '' : ' (נעול)'}</div>
-          <div class="bar"><i style="width:${total ? (w.unlocked ? w.referral_total : 0) / total * 100 : 0}%;background:var(--forest2)"></i></div>
+          <div class="lbl-s" style="margin:12px 0 6px">עמלות שותפים ${money(w.referral_payable)}${w.unlocked ? '' : ' (נעול)'}</div>
+          <div class="bar"><i style="width:${total ? w.referral_payable / total * 100 : 0}%;background:var(--forest2)"></i></div>
+          <p class="hint" style="text-align:right">התשלום מועבר בתחילת החודש הבא, על כל מה שאושר החודש.</p>
         </section>
         ${+w.pending_review ? `<div class="alert green">עוד ${money(w.pending_review)} ממתינים לאישור בקרת האיכות.</div>` : ''}
+        <section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.coins} תשלומים שקיבלת</h3></div>
+          ${pays.length ? `<ul class="rows">${pays.map(x => `<li class="rowi"><span class="ic ${x.status === 'paid' ? 'lime' : 'orange'}">${x.status === 'paid' ? ICON.check : ICON.clock}</span><span class="mid"><b>${monthName(x.period.slice(0,7))}</b><span>${x.status === 'paid' ? 'הועבר' + (x.reference ? ', אסמכתא ' + esc(x.reference) : '') : 'ממתין להעברה'}</span></span><span class="end amt ${x.status === 'paid' ? 'pos' : ''} num">${money(x.total)}</span></li>`).join('')}</ul>` : '<p class="muted">התשלום הראשון יופיע כאן בתחילת החודש הבא.</p>'}</section>
         <section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.wallet} תנועות אחרונות</h3></div>
           ${S.data.entries.length ? `<ul class="rows">${S.data.entries.map(e => `<li class="rowi"><span class="ic ${e.kind === 'referral' ? '' : 'lime'}">${e.kind === 'referral' ? ICON.users : ICON.check}</span><span class="mid"><b>${e.kind === 'referral' ? 'עמלת חבר מביא חבר' : e.kind === 'task' ? 'ניקיון שאושר' : 'התאמה'}</b><span>${new Date(e.created_at).toLocaleDateString('he-IL')}</span></span><span class="end amt pos num">+${money(e.amount)}</span></li>`).join('')}</ul>` : '<p class="muted">הניקיון הראשון שיאושר יופיע כאן.</p>'}</section>`
       : `<section class="card lime">
-          <div class="row between"><span class="lbl-s" style="color:rgba(31,59,23,.7)">עמלות החודש</span><span class="delta">${money(s.referral_fee)} לכל דירה</span></div>
-          <div class="big num" style="margin:6px 0 4px">${money(w.referral_total)}</div>
-          <div class="mini"><div><span>חברים שהבאת</span><b class="num">${refs.length}</b></div><div><span>דירות החודש</span><b class="num">${w.referral_count}</b></div></div>
+          <div class="row between"><span class="lbl-s" style="color:rgba(31,59,23,.7)">עמלות לתשלום החודש</span><span class="delta">${money(s.referral_fee)} לכל דירה</span></div>
+          <div class="big num" style="margin:6px 0 4px">${money(w.referral_payable)}</div>
+          <div class="mini"><div><span>חברים שהבאת</span><b class="num">${refs.length}</b></div><div><span>דירות שהם ניקו החודש</span><b class="num">${w.referral_count}</b></div></div>
         </section>
-        <section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.share} הקישור האישי שלך</h3></div>
-          <div class="reflink"><code>${esc(link)}</code><button class="btn xs lagoon" data-act="share" data-link="${esc(link)}">שיתוף</button></div></section>
+        ${+w.referral_forfeited > 0 ? `<div class="alert orange">הגעת לתקרה: ${money(w.referral_forfeited)} מעל התקרה לא ישולמו. כל ניקיון נוסף שלך מעלה את התקרה.</div>` : ''}
         <section class="card lock ${w.unlocked ? 'on' : 'off'}" style="margin-top:12px"><span class="ic">${w.unlocked ? ICON.lockOpen : ICON.lock}</span><div>
           <b>${w.unlocked ? 'העמלות פתוחות החודש' : 'העמלות נעולות החודש'}</b>
-          <p class="muted small">${w.unlocked ? `ניקית ${w.own_cleanings} דירות בעצמך החודש, אז כל העמלות נכנסות לארנק.` : 'כדי לקבל עמלות צריך לנקות לפחות דירה אחת בעצמך בכל חודש.'}</p></div></section>
-        <section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.users} הצוות שלך</h3></div>
+          <p class="muted small">${w.unlocked ? capNote : 'כדי לקבל עמלות צריך לנקות לפחות דירה אחת בעצמך בכל חודש. ' + capNote}</p></div></section>
+        <section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.share} הקישור האישי שלך</h3></div>
+          <div class="reflink"><code>${esc(link)}</code><button class="btn xs lagoon" data-act="share" data-link="${esc(link)}">שיתוף</button></div></section>
+        <section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.users} הצוות שלך</h3><span class="tag">${refs.length}</span></div>
           ${refs.length ? `<ul class="rows">${refs.map(r => `<li class="rowi"><span class="av" style="width:40px;height:40px">${initials(r.first_name)}</span><span class="mid"><b>${esc(r.first_name)}</b><span>${r.active ? 'פעיל/ה' : 'בתהליך אישור'}</span></span><span class="end num">${r.approved_this_month} דירות</span></li>`).join('')}</ul>` : '<p class="muted">עוד לא הצטרפו חברים. שלחו את הקישור למי שמחפש עבודה גמישה.</p>'}</section>`}`;
   },
   track(){
@@ -1021,18 +1052,19 @@ V.host = {
 V.admin = {
   async load(){
     S.tab.a ??= 'board';
-    const [profiles, aps, complexes, day, qa, month, settings] = await Promise.all([
-      api.profiles(), api.apartments(), api.complexes(), api.tasksOn(S.adminDate), api.qaTasks(), api.monthTasks(S.finMonth), api.settings()
+    S.payMonth ??= addDays(today().slice(0,8) + '01', -1).slice(0,7);
+    const [profiles, aps, complexes, day, qa, month, settings, pay] = await Promise.all([
+      api.profiles(), api.apartments(), api.complexes(), api.tasksOn(S.adminDate), api.qaTasks(), api.monthTasks(S.finMonth), api.settings(), api.rpc('payout_preview', {p_month:S.payMonth + '-01'})
     ]);
-    Object.assign(S.data, {profiles, aps, complexes, day, qa, month, settings});
+    Object.assign(S.data, {profiles, aps, complexes, day, qa, month, settings, pay});
   },
   name(id){ return S.data.profiles.find(p => p.id === id)?.full_name || '—'; },
   html(){
     const d = S.data;
     const pend = d.profiles.filter(p => p.status === 'submitted').length;
     const qaN = d.qa.filter(t => t.status === 'submitted').length;
-    const main = ({board:this.board, qa:this.qaView, fin:this.fin, people:this.people, apts:this.apts})[S.tab.a].call(this);
-    return topbar() + `<main class="shell wide">` + tabs([['board','לוח שיבוץ','cal'], ['qa','בקרת איכות','eye', qaN || ''], ['fin','כספים','coins'], ['people','משתמשים','users', pend || ''], ['apts','דירות','pool']], 'a', true) + main + `</main>`;
+    const main = ({board:this.board, qa:this.qaView, fin:this.fin, pay:this.payView, people:this.people, apts:this.apts})[S.tab.a].call(this);
+    return topbar() + `<main class="shell wide">` + tabs([['board','לוח שיבוץ','cal'], ['qa','בקרת איכות','eye', qaN || ''], ['fin','כספים','coins'], ['pay','תשלומים','wallet', d.pay.filter(x => x.payout_status === 'pending').length || ''], ['people','משתמשים','users', pend || ''], ['apts','דירות','pool']], 'a', true) + main + `</main>`;
   },
   board(){
     const d = S.data, td = S.adminDate;
@@ -1120,7 +1152,35 @@ V.admin = {
         <label class="f"><span>תוספת לניקיון דחוף (₪)</span><input class="inp" name="urgent_surcharge" type="number" min="0" value="${s.urgent_surcharge}"></label>
         <label class="f"><span>בלעדיות למאומתים בלוח (שעות)</span><input class="inp" name="pool_delay_hours" type="number" min="0" value="${s.pool_delay_hours}"></label>
         <label class="f"><span>גובה הפיקדון (₪)</span><input class="inp" name="deposit_amount" type="number" min="0" value="${s.deposit_amount}"></label>
+        <label class="f"><span>תקרת עמלות: % מהכנסת הניקיון (0 = ללא)</span><input class="inp" name="cap_pct" type="number" min="0" max="500" value="${Math.round(s.referral_cap_ratio * 100)}"></label>
+        <label class="f"><span>תקרת עמלות חודשית לאדם (₪, 0 = ללא)</span><input class="inp" name="referral_monthly_cap" type="number" min="0" value="${s.referral_monthly_cap}"></label>
+        <label class="f"><span>חודשי עמלה לכל חבר (0 = ללא הגבלה)</span><input class="inp" name="referral_months" type="number" min="0" value="${s.referral_months}"></label>
       </div><button class="btn sm lagoon" type="submit">שמירת הגדרות</button></form>`;
+  },
+  payView(){
+    const d = S.data, s = d.settings, rows = d.pay, cur = today().slice(0,7), closed = S.payMonth < cur;
+    const sum = f => rows.reduce((x, r) => x + (+f(r) || 0), 0);
+    const toPay = sum(r => r.payout_status === 'paid' ? 0 : r.total), saved = sum(r => r.referral_forfeited);
+    const notCreated = rows.filter(r => !r.payout_id && +r.total > 0).length;
+    return `<div class="toolbar"><label class="sr" for="pm">חודש</label><input id="pm" class="inp" style="max-width:200px;background:#fff" type="month" value="${S.payMonth}" max="${cur}" data-change="payMonth"><b>${monthName(S.payMonth)}</b><span style="flex:1"></span>
+        ${closed && notCreated ? `<button class="btn sm lagoon" data-act="createPayouts">הפקת תשלומים (${notCreated})</button>` : ''}
+        ${rows.some(r => r.payout_id) ? `<button class="btn sm ghost" style="background:#fff" data-act="exportPayouts">ייצוא לבנק (CSV)</button>` : ''}</div>
+      ${!closed ? `<div class="alert info">החודש עוד לא הסתיים. זו תצוגה מקדימה, ואפשר להפיק תשלומים רק לחודש שנגמר.</div>` : ''}
+      <div class="stats">
+        <div class="kpi"><b>${money(toPay)}</b><span>להעביר</span></div>
+        <div class="kpi"><b>${money(sum(r => r.task_amount))}</b><span>על ניקיונות</span></div>
+        <div class="kpi"><b>${money(sum(r => r.referral_paid))}</b><span>עמלות שמשולמות</span></div>
+        <div class="kpi"><b>${rows.filter(r => +r.total > 0).length}</b><span>מקבלי תשלום</span></div>
+      </div>
+      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>מנקה</th><th>ניקיונות</th><th>עמלות שנצברו</th><th>תקרה</th><th>עמלות לתשלום</th><th>נחסך</th><th>סה״כ</th><th>סטטוס</th></tr></thead><tbody>
+        ${rows.map(r => `<tr><td><b>${esc(r.full_name)}</b>${r.is_verified ? ' ★' : ''}</td><td>${money(r.task_amount)}</td><td>${money(r.referral_earned)}</td><td>${!r.unlocked ? 'נעול' : r.cap == null ? 'ללא' : money(r.cap)}</td><td>${money(r.referral_paid)}</td><td>${+r.referral_forfeited ? `<span style="color:var(--orange-ink)">${money(r.referral_forfeited)}</span>` : '—'}</td><td><b>${money(r.total)}</b></td>
+          <td>${r.payout_status === 'paid' ? `<span class="chip green">שולם${r.reference ? ' · ' + esc(r.reference) : ''}</span>` : r.payout_status === 'pending' ? `<button class="btn xs lagoon" data-act="markPaid" data-id="${r.payout_id}">סמן כשולם</button>` : `<span class="chip gray">${closed ? 'טרם הופק' : 'תצוגה מקדימה'}</span>`}</td></tr>`).join('') || '<tr><td colspan="8" class="muted">אין הכנסות בחודש הזה.</td></tr>'}
+      </tbody></table></div>
+      <section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.check} הכללים</h3></div><ul class="perks" style="margin:0">
+        <li>עמלות משולמות רק למי שניקה בעצמו באותו חודש.</li>
+        <li>${+s.referral_cap_ratio || +s.referral_monthly_cap ? `תקרה פעילה: ${+s.referral_cap_ratio ? `עד ${Math.round(s.referral_cap_ratio * 100)}% מהכנסות הניקיון` : ''}${+s.referral_cap_ratio && +s.referral_monthly_cap ? ' ו' : ''}${+s.referral_monthly_cap ? `עד ${money(s.referral_monthly_cap)} בחודש` : ''}.` : 'אין תקרה לעמלות. אפשר להגדיר תקרה בלשונית כספים.'}</li>
+        <li>${+s.referral_months ? `עמלה על כל חבר רק ב-${s.referral_months} החודשים הראשונים שלו.` : 'עמלה על חבר כל עוד הוא עובד, ללא הגבלת זמן.'}</li>
+        <li>כל תשלום מתועד: מה הועבר, מתי ובאיזו אסמכתא, מול קבלה של המנקה.</li></ul></section>`;
   },
   people(){
     const d = S.data, pend = d.profiles.filter(p => p.status === 'submitted');
@@ -1324,6 +1384,21 @@ const ACT = {
     const w = window.open('', '_blank');
     await run(async () => { const u = await api.signedUrl('kyc', el.dataset.p); if (w) w.location = u; else location.href = u; });
   },
+  async createPayouts(){
+    if (!DEMO && !confirm(`להפיק תשלומים ל${monthName(S.payMonth)}? הסכומים יינעלו לפי הכללים הנוכחיים.`)) return;
+    await run(async () => { const n = await api.rpc('create_payouts', {p_month:S.payMonth + '-01'}); await refresh(true); toast(`הופקו ${n} תשלומים`); });
+  },
+  async markPaid(el){
+    const ref = await ask('סימון כשולם', 'מספר אסמכתא של ההעברה (לא חובה)', 'סמן כשולם'); if (ref === null) return;
+    await run(async () => { await api.rpc('mark_payout_paid', {p_payout:el.dataset.id, p_reference:ref}); await refresh(true); }, 'סומן כשולם');
+  },
+  exportPayouts(){
+    const rows = S.data.pay.filter(r => r.payout_id);
+    const csv = '﻿' + [['שם','טלפון','חודש','ניקיונות','עמלות','סה״כ','סטטוס','אסמכתא'], ...rows.map(r => [r.full_name, r.phone || '', S.payMonth, r.task_amount, r.referral_paid, r.total, r.payout_status === 'paid' ? 'שולם' : 'ממתין', r.reference || ''])]
+      .map(l => l.map(v => '"' + String(v ?? '').replace(/"/g, '""') + '"').join(',')).join('\n');
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'})); a.download = `cleaneilat-payouts-${S.payMonth}.csv`; document.body.appendChild(a); a.click(); a.remove();
+    toast('הקובץ ירד');
+  },
   aptForm(el){ const a = el.dataset.id ? S.data.aps.find(x => x.id === el.dataset.id) : {}; S.modal = V.admin.aptForm(a); paint(); }
 };
 const CHG = {
@@ -1348,6 +1423,7 @@ const CHG = {
   },
   date(el){ if (el.value) { S.adminDate = el.value; refresh(); } },
   month(el){ if (el.value) { S.finMonth = el.value; refresh(); } },
+  payMonth(el){ if (el.value) { S.payMonth = el.value; refresh(); } },
   async assign(el){
     const {id, f} = el.dataset, t = S.data.day.find(x => x.id === id);
     const patch = {[f]:el.value || null};
@@ -1375,7 +1451,7 @@ const SUB = {
   },
   async settings(f){
     const v = k => +f[k].value;
-    await run(async () => { await api.upd('settings', 1, {referral_fee:v('referral_fee'), urgent_surcharge:v('urgent_surcharge'), pool_delay_hours:v('pool_delay_hours'), deposit_amount:v('deposit_amount'), updated_at:nowIso()}); await refresh(true); }, 'ההגדרות נשמרו');
+    await run(async () => { await api.upd('settings', 1, {referral_fee:v('referral_fee'), urgent_surcharge:v('urgent_surcharge'), pool_delay_hours:v('pool_delay_hours'), deposit_amount:v('deposit_amount'), referral_cap_ratio:v('cap_pct') / 100, referral_monthly_cap:v('referral_monthly_cap'), referral_months:v('referral_months'), updated_at:nowIso()}); await refresh(true); }, 'ההגדרות נשמרו');
   },
   async complex(f){ await run(async () => { await api.ins('complexes', {name:f.name.value.trim(), is_premium:f.prem.checked, sort:S.data.complexes.length + 1}); await refresh(true); }, 'המתחם נוסף'); },
   async apt(f){
