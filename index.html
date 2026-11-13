@@ -526,7 +526,8 @@ const D = {
       case 'payout_preview': {
         const ym = a.p_month.slice(0,7);
         return this.profiles.map(p => { const c = this.calc(p.id, ym); const po = this.payouts.find(x => x.user_id === p.id && x.period.slice(0,7) === ym);
-          return {user_id:p.id, full_name:p.full_name, phone:p.phone, is_verified:p.is_verified, ...c, payout_id:po?.id || null, payout_status:po?.status || null, reference:po?.reference || null}; })
+          const lk = po ? {task_amount:po.task_amount, referral_earned:po.referral_earned, referral_paid:po.referral_paid, referral_forfeited:po.referral_forfeited, total:po.total, cap:null} : {};
+          return {user_id:p.id, full_name:p.full_name, phone:p.phone, is_verified:p.is_verified, ...c, ...lk, payout_id:po?.id || null, payout_status:po?.status || null, reference:po?.reference || null}; })
           .filter(x => x.task_amount > 0 || x.referral_earned > 0 || x.payout_id).sort((x, y) => y.total - x.total); }
       case 'create_payouts': {
         if (a.p_month.slice(0,7) >= today().slice(0,7)) err('אפשר להפיק תשלומים רק לחודש שהסתיים');

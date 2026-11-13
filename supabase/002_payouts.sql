@@ -60,13 +60,16 @@ language plpgsql stable security definer set search_path = public as $$
 begin
   if not fn_is_admin() then raise exception 'admin only'; end if;
   return query
-  select p.id, p.full_name, p.phone, p.is_verified, c.task_amount, c.referral_earned, c.cap, c.referral_paid,
-         c.referral_forfeited, c.total, c.unlocked, po.id, po.status, po.reference
+  select p.id, p.full_name, p.phone, p.is_verified,
+         coalesce(po.task_amount, c.task_amount), coalesce(po.referral_earned, c.referral_earned),
+         case when po.id is null then c.cap else null end,
+         coalesce(po.referral_paid, c.referral_paid), coalesce(po.referral_forfeited, c.referral_forfeited),
+         coalesce(po.total, c.total), c.unlocked, po.id, po.status, po.reference
   from profiles p
   cross join lateral fn_payout_calc(p.id, p_month) c
   left join payouts po on po.user_id = p.id and po.period = date_trunc('month', p_month)::date
   where c.task_amount > 0 or c.referral_earned > 0 or po.id is not null
-  order by c.total desc;
+  order by coalesce(po.total, c.total) desc;
 end $$;
 
 create or replace function public.create_payouts(p_month date)
