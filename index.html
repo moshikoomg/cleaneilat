@@ -1198,7 +1198,13 @@ const ACT = {
       if (error) throw error;
     });
   },
-  async signout(){ if (DEMO) { location.href = location.pathname; return; } await sb.auth.signOut(); S.profile = null; boot(); },
+  async signout(){
+    S.modal = null; S.lb = null; S.taskId = null; S.tab = {}; S.data = {}; S.ob = {step:0, answers:{}};
+    if (DEMO) { location.href = location.pathname; return; }
+    try { await sb.auth.signOut(); } catch {}
+    if (liveCh) { try { sb.removeChannel(liveCh); } catch {} liveCh = null; }
+    S.profile = null; scrollTo(0,0); route();
+  },
   account(){
     const p = S.profile;
     S.modal = `<h2>${esc(p.full_name || 'החשבון שלי')}</h2><p class="muted">${esc(p.email || '')}</p>
