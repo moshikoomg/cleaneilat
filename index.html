@@ -198,7 +198,7 @@ textarea.inp{min-height:90px;resize:vertical;padding-top:14px}
 .alert.green{background:var(--lime-soft);color:var(--lime-ink)}
 .alert.info{background:#fff;color:var(--ink2)}
 .alert.red{background:var(--red-soft);color:var(--red)}
-.sticky-cta{position:sticky;bottom:calc(84px + var(--safe-b));padding-top:10px}
+.sticky-cta{position:sticky;bottom:calc(84px + var(--safe-b));padding:10px 0 4px;background:linear-gradient(transparent,#fff 28%)}
 .hint{font-size:13px;color:var(--muted);margin-top:8px;text-align:center}
 
 /* wallet bits */
@@ -282,6 +282,18 @@ textarea.inp{min-height:90px;resize:vertical;padding-top:14px}
 .lb{position:fixed;inset:0;z-index:70;background:rgba(10,12,14,.92);display:grid;place-items:center;padding:16px}
 .lb img{max-height:88vh;border-radius:16px}
 .loading{display:grid;place-items:center;min-height:60vh}
+.apt{display:flex;gap:14px;align-items:flex-start}
+.apt .info{flex:1;min-width:0}
+.apt h3{font-size:17px}
+.apt .meta{color:var(--muted);font-size:14px}
+.apt .times{margin-top:8px;font-size:13.5px;color:var(--ink2)}
+.hanger{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;width:92px;min-height:92px;border-radius:22px;text-align:center;flex:none;padding:10px 6px}
+.hanger svg{width:24px;height:24px}
+.hanger b{font-size:13px;font-weight:600;line-height:1.2}
+.hanger small{font-size:11.5px;opacity:.75}
+.hanger.green{background:var(--lime);color:var(--forest)}
+.hanger.orange{background:var(--orange-soft);color:var(--orange-ink)}
+.hanger.gray{background:var(--soft);color:var(--gray-ink)}
 .hide-sm{}
 @media(max-width:480px){.hide-sm{display:none}}
 
@@ -326,7 +338,8 @@ const CFG = {
 /* ═════════════ helpers ═════════════ */
 const qs = new URLSearchParams(location.search);
 if (qs.get('ref')) localStorage.setItem('ce_ref', qs.get('ref'));
-let DEMO = qs.has('demo') || sessionStorage.getItem('ce_demo') === '1';
+let DEMO = qs.has('demo');
+try { sessionStorage.removeItem('ce_demo'); } catch {}
 let sb = null;
 const app = document.getElementById('app');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -684,7 +697,7 @@ function topbar(){
       : `<a class="brand" href="#" data-act="home"><i aria-hidden="true"></i>CleanEilat</a>`}
     <span class="sp"></span>
     ${DEMO ? `<label class="sr" for="demoSw">החלף תצוגה בהדגמה</label><select id="demoSw" class="demo-sw" data-change="demoRole">
-      ${[['cleaner','הדגמה: מנקה'], ['admin','הדגמה: מנהל'], ['new','הדגמה: נרשם חדש']].map(([v, l]) => `<option value="${v}" ${D.cur === v ? 'selected' : ''}>${l}</option>`).join('')}
+      ${[['cleaner','הדגמה: מנקה'], ['admin','הדגמה: מנהל'], ['host','הדגמה: בעל דירה'], ['new','הדגמה: נרשם חדש']].map(([v, l]) => `<option value="${v}" ${D.cur === v ? 'selected' : ''}>${l}</option>`).join('')}
     </select>` : `<span class="brand hide-sm"><i aria-hidden="true"></i></span>`}
   </div></header>`;
 }
@@ -882,7 +895,7 @@ V.cleaner = {
     ${t.backup_cleaner === S.profile.id && stage < 3 ? `<div class="alert info">את/ה בכוננות גיבוי לדירה הזו. היכנס/י רק אם הצוות הקפיץ אותך.</div>` : ''}
     <ol class="flow">
       <li class="${stage > 1 ? 'done' : 'cur'}"><h3>הגעה לדירה</h3>
-        ${code ? `<div class="codebox"><span>קוד כניסה</span><b>${esc(code.code || '—')}</b>${code.notes ? `<p>${esc(code.notes)}</p>` : ''}</div>`
+        ${code && stage < 4 ? `<div class="codebox"><span>קוד כניסה</span><b>${esc(code.code || '—')}</b>${code.notes ? `<p>${esc(code.notes)}</p>` : ''}</div>`
           : stage < 4 ? `<button class="btn ${stage === 1 ? 'lagoon' : 'ghost'}" data-act="reveal" data-id="${t.id}">${ICON.key.replace('<svg','<svg width="22" height="22"')} ${stage === 1 ? 'הגעתי לדירה' : 'הצגת קוד הכניסה שוב'}</button>
              <p class="hint">קוד הכניסה והכספת נחשפים רק כשמגיעים. שעת ההגעה נשמרת.</p>` : ''}
         ${t.arrived_at ? `<p class="muted small" style="margin-top:8px">הגעה נרשמה ב-${fmtTime(t.arrived_at)}</p>` : ''}
@@ -981,13 +994,16 @@ V.host = {
     const upcoming = tasks.filter(t => t.task_date > td || (t.task_date === td && ['requested','pending'].includes(t.status))).sort((a, b) => a.task_date.localeCompare(b.task_date));
     const ready = aps.filter(a => cur(a)?.status === 'approved').length;
     return topbar() + `<main class="shell">
-      <div class="hello"><h1>${greet()}, ${esc(first(S.profile.full_name))}</h1><p>${aps.length ? `${ready} מתוך ${aps.length} דירות מוכנות לאורחים` : 'הדירות שלך יופיעו כאן'}</p></div>
-      <button class="btn lagoon" data-act="hostOrder" ${aps.length ? '' : 'disabled'}>הזמנת ניקיון נוסף / דחוף</button>
+      <section class="card">
+        <div class="row between"><span class="lbl-s">מוכנות לאורחים עכשיו</span><span class="tag">${fmtShort(td)}</span></div>
+        <div class="big num" style="margin:6px 0 14px">${ready}<small>/ ${aps.length}</small></div>
+        <button class="btn lagoon" data-act="hostOrder" ${aps.length ? '' : 'disabled'}>הזמנת ניקיון נוסף / דחוף</button>
+      </section>
       <div class="sec-h"><h2>הדירות שלי</h2><span class="muted small">מתעדכן בזמן אמת</span></div>
       ${aps.length ? aps.map(a => { const t = cur(a); const [lbl, c] = t ? hostState(t.status) : ['אין ניקיון','gray'];
         const showPh = t && ['submitted','approved'].includes(t.status);
         return `<div class="card"><div class="apt">
-          <span class="hanger ${c}">${c === 'green' ? ICON.check : ''}${lbl.replace(' ', '<br>')}${t ? `<small>${t.task_date === td ? 'היום' : fmtShort(t.task_date)}</small>` : ''}</span>
+          <span class="hanger ${c}">${c === 'green' ? ICON.check : c === 'orange' ? ICON.broom : ICON.clock}<b>${lbl}</b>${t ? `<small>${t.task_date === td ? 'היום' : fmtShort(t.task_date)}</small>` : ''}</span>
           <div class="info"><h3>${esc(a.name)}</h3><p class="meta">${esc(a.complex?.name || '')}${a.address ? ', ' + esc(a.address) : ''}</p>
             ${t ? `<p class="times">${t.started_at ? `התחלה <b>${fmtTime(t.started_at)}</b>` : `חלון <b>${win(t)}</b>`}${t.finished_at ? `, סיום <b>${fmtTime(t.finished_at)}</b>` : ''}</p>` : ''}
             ${t?.status === 'submitted' ? '<p class="small muted" style="margin-top:4px">הניקיון הסתיים ועובר בקרת איכות.</p>' : ''}
@@ -1172,7 +1188,7 @@ const setPath = (path, v) => {
 };
 const ACT = {
   home(){ S.taskId = null; paint(); },
-  demo(){ sessionStorage.setItem('ce_demo','1'); DEMO = true; D.init(); D.cur = 'cleaner'; boot(); },
+  demo(){ location.href = location.pathname + '?demo'; },
   async google(){
     if (DEMO) return toast('זו הדגמה. באתר האמיתי תיפתח התחברות עם Google');
     await run(async () => {
@@ -1182,7 +1198,7 @@ const ACT = {
       if (error) throw error;
     });
   },
-  async signout(){ if (DEMO) { sessionStorage.removeItem('ce_demo'); location.href = location.pathname; return; } await sb.auth.signOut(); S.profile = null; boot(); },
+  async signout(){ if (DEMO) { location.href = location.pathname; return; } await sb.auth.signOut(); S.profile = null; boot(); },
   account(){
     const p = S.profile;
     S.modal = `<h2>${esc(p.full_name || 'החשבון שלי')}</h2><p class="muted">${esc(p.email || '')}</p>
@@ -1256,8 +1272,9 @@ const ACT = {
   async claim(el){ await run(async () => { await api.rpc('claim_task', {p_task:el.dataset.id}); S.tab.c = 'today'; await refresh(true); }, 'המשימה שלך. היא מחכה ברשימת המשימות'); },
   async deposit(){ await run(async () => { await api.rpc('request_deposit_track'); await refresh(true); }, 'הבקשה נשלחה'); },
   async share(el){ const link = el.dataset.link; const text = 'מצטרפים איתי ל-CleanEilat, עבודה גמישה בניקיון דירות נופש באילת: ' + link;
-    if (navigator.share) { try { await navigator.share({title:'CleanEilat', text, url:link}); } catch {} }
-    else { await navigator.clipboard?.writeText(link); toast('הקישור הועתק'); } },
+    if (navigator.share) { try { await navigator.share({title:'CleanEilat', text, url:link}); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
+    try { await navigator.clipboard.writeText(link); toast('הקישור הועתק'); }
+    catch { S.modal = `<h2>הקישור האישי שלך</h2><p class="muted" style="margin-bottom:10px">סמנו והעתיקו את הקישור, ושלחו לחברים.</p><input class="inp" dir="ltr" readonly value="${esc(link)}" onclick="this.select()"><button class="btn lagoon" style="margin-top:12px" data-act="closeModal" data-force="1">סגירה</button>`; paint(); } },
 
   /* host */
   hostOrder(){
