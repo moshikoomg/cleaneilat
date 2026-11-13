@@ -1173,7 +1173,15 @@ const setPath = (path, v) => {
 const ACT = {
   home(){ S.taskId = null; paint(); },
   demo(){ sessionStorage.setItem('ce_demo','1'); DEMO = true; D.init(); D.cur = 'cleaner'; boot(); },
-  async google(){ if (DEMO) return toast('זו הדגמה. באתר האמיתי תיפתח התחברות עם Google'); await run(async () => { const {error} = await sb.auth.signInWithOAuth({provider:'google', options:{redirectTo:location.origin + location.pathname}}); if (error) throw error; }); },
+  async google(){
+    if (DEMO) return toast('זו הדגמה. באתר האמיתי תיפתח התחברות עם Google');
+    await run(async () => {
+      const st = await fetch(CFG.url + '/auth/v1/settings', {headers:{apikey:CFG.key}}).then(r => r.json()).catch(() => null);
+      if (st && st.external && !st.external.google) throw new Error('ההתחברות עם Google עוד לא זמינה. בינתיים אפשר להיכנס עם קישור למייל, מתחת לכפתור.');
+      const {error} = await sb.auth.signInWithOAuth({provider:'google', options:{redirectTo:location.origin + location.pathname}});
+      if (error) throw error;
+    });
+  },
   async signout(){ if (DEMO) { sessionStorage.removeItem('ce_demo'); location.href = location.pathname; return; } await sb.auth.signOut(); S.profile = null; boot(); },
   account(){
     const p = S.profile;
@@ -1403,6 +1411,8 @@ async function boot(){
         if ((S.profile?.id || null) !== id && ev !== 'INITIAL_SESSION') setTimeout(boot, 0);
       });
     }
+    const errDesc = qs.get('error_description') || new URLSearchParams(location.hash.slice(1)).get('error_description');
+    if (errDesc) { toast('ההתחברות נכשלה: ' + errDesc, 'err'); history.replaceState(null, '', location.pathname); }
     S.profile = await api.me();
     if (location.search.includes('code=')) history.replaceState(null, '', location.pathname + (qs.has('demo') ? '?demo' : ''));
     route(); live();
