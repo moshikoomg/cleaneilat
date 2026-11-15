@@ -388,6 +388,7 @@ const ST = {
   approved:   ['מוכן לאורחים','green'],
   cancelled:  ['בוטל','gray']
 };
+const F = k => !!(S.cfg && S.cfg['feature_' + k]);
 const chip = s => `<span class="chip ${ST[s]?.[1] || 'gray'}">${ST[s]?.[0] || esc(s)}</span>`;
 const hostState = s => ['approved'].includes(s) ? ['מוכן לאורחים','green'] : ['arrived','in_progress','submitted','needs_fix'].includes(s) ? ['בניקיון כעת','orange'] : ['ממתין','gray'];
 const tone = s => ST[s]?.[1] === 'red' ? 'orange' : (ST[s]?.[1] || 'gray');
@@ -437,7 +438,7 @@ const D = {
     ];
     const A = (id, o) => Object.assign({id, host_id:'h1', host_price:260, rate_base:120, rate_max:150, is_premium:false, active:true}, o);
     this.apartments = [
-      A('ap1',{name:'הטרמינל, סוויטה 12', complex_id:'x1', address:'שדרות התמרים 5', host_price:320, rate_base:140, rate_max:175, is_premium:true}),
+      A('ap1',{ical_url:'https://www.airbnb.com/calendar/ical/demo.ics', ical_synced_at:nowIso(), name:'הטרמינל, סוויטה 12', complex_id:'x1', address:'שדרות התמרים 5', host_price:320, rate_base:140, rate_max:175, is_premium:true}),
       A('ap2',{name:'הטרמינל, דירה 31', complex_id:'x1', address:'שדרות התמרים 5', host_price:300, rate_base:130, rate_max:165, is_premium:true}),
       A('ap3',{name:'גן ים, דירת גן', complex_id:'x2', address:'הדקל 14'}),
       A('ap4',{name:'נוף הרים 7', complex_id:'x2', address:'אדמונית 7'}),
@@ -466,7 +467,7 @@ const D = {
     const lm = addDays(td.slice(0,8) + '01', -5) + 'T12:00:00Z';
     [['c1','task',3850],['c1','referral',420],['c2','task',300],['c2','referral',4300],['c3','task',2600],['c4','task',1900]].forEach(([u,k,a]) => this.wallet.push({id:uid(), user_id:u, kind:k, amount:a, created_at:lm}));
     this.payouts = [];
-    this.settings = {id:1, referral_fee:10, urgent_surcharge:80, pool_delay_hours:3, deposit_amount:1500, referral_cap_ratio:0, referral_monthly_cap:0, referral_months:0};
+    this.settings = {id:1, referral_fee:10, urgent_surcharge:80, pool_delay_hours:3, deposit_amount:1500, referral_cap_ratio:0, referral_monthly_cap:0, referral_months:0, feature_deposit:false, feature_referral:false};
   },
   me(){ return this.profiles.find(p => p.id === ({admin:'a1', cleaner:'c1', host:'h1', new:'n1'})[this.cur]); },
   calc(uid, ym){
@@ -640,6 +641,16 @@ const api = {
   }
 };
 
+async function syncNow(aptId){
+  if (DEMO) {
+    const ap = D.apartments.find(x => x.ical_url) || D.apartments[0]; const d1 = addDays(today(), 2), d2 = addDays(today(), 5); let n = 0;
+    [[d1,'demo-b1'],[d2,'demo-b2']].forEach(([d, u]) => { if (!D.tasks.some(t => t.booking_uid === u)) { D.tasks.push({id:uid(), apartment_id:ap.id, task_date:d, window_start:'11:00', window_end:'15:00', status:'pending', source:'ical', booking_uid:u, before_photos:[], photos:{}, published_at:nowIso(), referral_fee:0}); n++; } });
+    ap.ical_synced_at = nowIso(); return {apartments:1, created:n, moved:0, cancelled:0, errors:[]};
+  }
+  const {data, error} = await sb.functions.invoke('ical-sync', {body: aptId ? {apartment_id: aptId} : {}});
+  if (error) throw new Error('הסנכרון נכשל: ' + error.message);
+  return data;
+}
 /* signed image hydration */
 const URLS = {};
 async function hydrate(){
@@ -750,22 +761,22 @@ V.landing = {
       <section class="card hero-card">
         <span class="tag gold">מגייסים מנקים באילת</span>
         <h1 style="margin-top:14px">עבודה גמישה בניקיון דירות נופש. תשלום על כל דירה.</h1>
-        <p class="lead">בוחרים משימות מהנייד, מצלמים לפני ואחרי, והכסף נכנס לארנק ברגע שהניקיון מאושר. מביאים חברים? מרוויחים על כל דירה שהם מנקים.</p>
+        <p class="lead">בוחרים משימות מהנייד, מצלמים לפני ואחרי, והכסף נכנס לארנק ברגע שהניקיון מאושר.${F('referral') ? ' מביאים חברים? מרוויחים על כל דירה שהם מנקים.' : ''}</p>
         ${authBlock()}
       </section>
       <div class="grid-cards">
         <section class="card lime earn-demo" aria-label="דוגמה לארנק">
-          <div class="earn-row"><span class="vbadge"><i>★</i>מנקה מאומת/ת</span><span class="delta">+18% החודש</span></div>
+          <div class="earn-row"><span class="vbadge"><i>✓</i>${F('deposit') ? 'מנקה מאומת/ת' : 'מנקה עצמאי/ת'}</span><span class="delta">+18% החודש</span></div>
           <p class="muted" style="margin-top:16px">דוגמה: הצטבר החודש</p>
           <div class="big num">₪6,240</div>
-          <div class="mini"><div><span>דירות שנוקו</span><b class="num">38</b></div><div><span>עמלות שותפים</span><b class="num">₪420</b></div></div>
+          <div class="mini"><div><span>דירות שנוקו</span><b class="num">38</b></div><div><span>${F('referral') ? 'עמלות שותפים' : 'תשלום ממוצע לדירה'}</span><b class="num">${F('referral') ? '₪420' : '₪164'}</b></div></div>
         </section>
         <section class="card">
           <div class="card-h"><h3>${ICON.clock} יום עבודה טיפוסי</h3><span class="tag" dir="ltr">11:00–15:00</span></div>
           <ul class="rows">
             <li class="rowi"><span class="ic lime">${ICON.check}</span><span class="mid"><b>הטרמינל, סוויטה 12</b><span>אושר, 4 תמונות</span></span><span class="end amt pos num">+₪175</span></li>
             <li class="rowi"><span class="ic orange">${ICON.broom}</span><span class="mid"><b>פנטהאוז צופית</b><span>בניקיון כעת</span></span><span class="end amt num">₪180</span></li>
-            <li class="rowi"><span class="ic">${ICON.users}</span><span class="mid"><b>עמלה מיוסי</b><span>חבר מביא חבר</span></span><span class="end amt pos num">+₪10</span></li>
+            ${F('referral') ? `<li class="rowi"><span class="ic">${ICON.users}</span><span class="mid"><b>עמלה מיוסי</b><span>חבר מביא חבר</span></span><span class="end amt pos num">+₪10</span></li>` : `<li class="rowi"><span class="ic">${ICON.cal}</span><span class="mid"><b>נוף הרים 7</b><span>מחר, משובץ לך</span></span><span class="end amt num">₪120</span></li>`}
           </ul>
         </section>
       </div>
@@ -777,10 +788,10 @@ V.landing = {
       <li><div><b>אימות זהות ועסק</b><span>צילום ת״ז ואישור עוסק זעיר או מורשה.</span></div></li>
       <li><div><b>יוצאים לשטח</b><span>אחרי האישור, המשימות כבר מחכות בלוח.</span></div></li>
     </ol>
-    <h2 class="lp-sec-title">שלוש דרכים להרוויח יותר</h2>
+    <h2 class="lp-sec-title">${F('deposit') || F('referral') ? 'דרכים להרוויח יותר' : 'למה לעבוד איתנו'}</h2>
     <div class="grid-cards" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">
-      <section class="card"><div class="card-h"><h3>${ICON.star} מסלול מאומת</h3><span class="tag gold">₪1,500 פיקדון</span></div><p class="muted">ערבון שמוחזר בסיום. מאומתים מקבלים קדימות לדירות הרווחיות בטרמינל ותעריף מקסימלי.</p></section>
-      <section class="card"><div class="card-h"><h3>${ICON.users} חבר מביא חבר</h3><span class="tag gold">כל חודש</span></div><p class="muted">עמלה קבועה על כל דירה שחבר שהבאת מנקה. נפתח כשמנקים לפחות דירה אחת בחודש בעצמך.</p></section>
+      ${F('deposit') ? `<section class="card"><div class="card-h"><h3>${ICON.star} מסלול מאומת</h3><span class="tag gold">₪1,500 פיקדון</span></div><p class="muted">ערבון שמוחזר בסיום. מאומתים מקבלים קדימות לדירות הרווחיות בטרמינל ותעריף מקסימלי.</p></section>` : `<section class="card"><div class="card-h"><h3>${ICON.cal} עבודה גמישה</h3></div><p class="muted">בוחרים בעצמכם אילו משימות לקחת מהלוח הפתוח. בלי משמרות ובלי מינימום.</p></section>`}
+      ${F('referral') ? `<section class="card"><div class="card-h"><h3>${ICON.users} חבר מביא חבר</h3><span class="tag gold">כל חודש</span></div><p class="muted">עמלה קבועה על כל דירה שחבר שהבאת מנקה. נפתח כשמנקים לפחות דירה אחת בחודש בעצמך.</p></section>` : `<section class="card"><div class="card-h"><h3>${ICON.wallet} תשלום מסודר</h3></div><p class="muted">כל ניקיון שאושר נכנס לארנק, והתשלום מועבר פעם בחודש עם פירוט מלא.</p></section>`}
       <section class="card"><div class="card-h"><h3>${ICON.cam} תיעוד שמגן עליך</h3></div><p class="muted">צילום מצב בכניסה לדירה. אף אחד לא יאשים אותך במשהו שאורח שבר.</p></section>
     </div>
     <section class="card lime" style="margin-top:12px;text-align:center;padding:30px 22px">
@@ -809,8 +820,8 @@ V.onboarding = {
         <h1 style="font-size:24px">הבקשה בבדיקה</h1>
         <p class="muted" style="margin-top:6px">קיבלנו את הפרטים והמסמכים. בדרך כלל מאשרים תוך יום עסקים.</p></section>
       <section class="card"><div class="card-h"><h3>מה קורה עכשיו</h3></div><ul class="perks" style="margin:0">
-        <li>בודקים את תעודת הזהות ואישור העוסק.</li><li>פותחים לך ארנק אישי וקישור חבר מביא חבר.</li><li>אחרי האישור, הכניסה הבאה נפתחת ישר למשימות.</li></ul></section>
-      <section class="card"><div class="card-h"><h3>${ICON.star} כדאי לדעת</h3></div><p class="muted">מנקים שמפקידים ערבון של 1,500 ₪ ועומדים בנהלים מקבלים קדימות בטרמינל ותעריף מקסימלי. אפשר להצטרף אחרי האישור.</p></section>
+        <li>בודקים את תעודת הזהות ואישור העוסק.</li><li>פותחים לך ארנק אישי לתשלומים.</li><li>אחרי האישור, הכניסה הבאה נפתחת ישר למשימות.</li></ul></section>
+      ${F('deposit') ? `<section class="card"><div class="card-h"><h3>${ICON.star} כדאי לדעת</h3></div><p class="muted">מנקים שמפקידים ערבון ועומדים בנהלים מקבלים קדימות בטרמינל ותעריף מקסימלי. אפשר להצטרף אחרי האישור.</p></section>` : ''}
       <button class="btn ghost" style="margin-top:12px;background:#fff;box-shadow:none" data-act="recheck">בדיקה אם אושרתי</button></main>`;
     const steps = ['קצת עליך','אימות זהות ועסק'];
     let body = '';
@@ -851,14 +862,14 @@ V.cleaner = {
       api.cleanerTasks(), api.rpc('my_wallet'), api.rpc('my_referrals'), api.rpc('open_pool'), api.walletEntries(), api.settings(), api.me(), api.myPayouts()
     ]);
     S.profile = me;
-    Object.assign(S.data, {tasks, wallet, refs, pool, entries, settings, payouts});
+    Object.assign(S.data, {tasks, wallet, refs, pool, entries, settings, payouts}); S.cfg = settings;
   },
   html(){
     const d = S.data, t = S.taskId && d.tasks.find(x => x.id === S.taskId);
     let main;
     if (t) main = this.detail(t);
     else main = ({today:this.today, pool:this.pool, wallet:this.wallet, track:this.track})[S.tab.c].call(this);
-    return topbar() + `<main class="shell">${main}</main>` + tabs([['today','בית','list'], ['pool','לוח פתוח','pool', d.pool.length || ''], ['wallet','ארנק','wallet'], ['track','מאומת','star']], 'c');
+    return topbar() + `<main class="shell">${main}</main>` + tabs([['today','בית','list'], ['pool','לוח פתוח','pool', d.pool.length || ''], ['wallet','ארנק','wallet'], F('deposit') ? ['track','מאומת','star'] : ['track','פרופיל','user']], 'c');
   },
   today(){
     const p = S.profile, d = S.data, td = today(), w = d.wallet;
@@ -878,21 +889,25 @@ V.cleaner = {
         <div class="big num" style="margin:6px 0 16px">${money(total)}</div>
         <div class="row" style="flex-wrap:nowrap">
           <button class="btn sm" data-act="tab" data-key="c" data-id="wallet">לארנק</button>
-          <button class="btn sm ghost" data-act="share" data-link="${esc(location.origin + location.pathname + '?ref=' + p.referral_code)}">${ICON.share.replace('<svg','<svg width="18" height="18"')} הזמנת חבר</button>
+          ${F('referral') ? `<button class="btn sm ghost" data-act="share" data-link="${esc(location.origin + location.pathname + '?ref=' + p.referral_code)}">${ICON.share.replace('<svg','<svg width="18" height="18"')} הזמנת חבר</button>` : ''}
           <span style="flex:1"></span>
           <button class="circle" data-act="tab" data-key="c" data-id="pool" aria-label="ללוח הפתוח">${ICON.arrow}</button>
         </div>
       </section>
       <div class="grid-cards two" style="margin-top:12px">
-        <section class="card lime" style="padding:16px">
+        ${F('referral') ? `<section class="card lime" style="padding:16px">
           <span class="lbl-s" style="color:rgba(31,59,23,.7)">עמלות שותפים</span>
           <div class="num" style="font-size:26px;font-weight:600;margin-top:4px">${money(w.referral_payable)}</div>
           <span class="delta" style="margin-top:8px">${!w.unlocked ? 'נעול החודש' : +w.referral_forfeited > 0 ? 'הגעת לתקרה' : 'פתוח החודש'}</span>
-        </section>
+        </section>` : `<section class="card lime" style="padding:16px">
+          <span class="lbl-s" style="color:rgba(31,59,23,.7)">ניקיונות החודש</span>
+          <div class="num" style="font-size:26px;font-weight:600;margin-top:4px">${w.own_cleanings}</div>
+          <span class="delta" style="margin-top:8px">אושרו בבקרה</span>
+        </section>`}
         <section class="card" style="padding:16px">
           <span class="lbl-s">ממתין לאישור</span>
           <div class="num" style="font-size:26px;font-weight:600;margin-top:4px">${money(w.pending_review)}</div>
-          <span class="tag" style="margin-top:8px">${p.is_verified ? 'תעריף מקסימלי' : 'תעריף רגיל'}</span>
+          ${F('deposit') ? `<span class="tag" style="margin-top:8px">${p.is_verified ? 'תעריף מקסימלי' : 'תעריף רגיל'}</span>` : '<span class="tag" style="margin-top:8px">אחרי בקרה</span>'}
         </section>
       </div>
       <section class="card" style="margin-top:12px">
@@ -955,7 +970,7 @@ V.cleaner = {
   pool(){
     const p = S.profile, d = S.data;
     return `<div class="hello"><h1>לוח משימות פתוח</h1><p>דירות שעדיין מחכות למנקה. מי שתופס ראשון, מקבל.</p></div>
-      ${p.is_verified ? `<div class="alert green">${ICON.star.replace('<svg','<svg width="16" height="16" style="vertical-align:-3px"')} כמנקה מאומת/ת את/ה רואה משימות חדשות ודירות פרימיום לפני כולם.</div>`
+      ${!F('deposit') ? '' : p.is_verified ? `<div class="alert green">${ICON.star.replace('<svg','<svg width="16" height="16" style="vertical-align:-3px"')} כמנקה מאומת/ת את/ה רואה משימות חדשות ודירות פרימיום לפני כולם.</div>`
         : `<div class="alert info">משימות חדשות ודירות פרימיום בטרמינל מוצגות קודם למנקים מאומתים. <button class="linkbtn" data-act="tab" data-key="c" data-id="track">איך מצטרפים</button></div>`}
       ${d.pool.length ? d.pool.map(x => `<div class="card">
         <div class="row between"><div class="row">${x.is_urgent ? '<span class="tag red">דחוף</span>' : ''}${x.is_premium ? '<span class="tag gold">פרימיום</span>' : ''}</div><b style="font-size:20px">${money(x.pay)}</b></div>
@@ -971,14 +986,15 @@ V.cleaner = {
     const link = location.origin + location.pathname + '?ref=' + S.profile.referral_code;
     const refs = S.data.refs, pays = S.data.payouts || [];
     const capNote = hasCap ? `העמלות מוגבלות החודש ל-${money(w.referral_cap)}.` : 'אין תקרה לעמלות: כל עמלה שצברת משולמת.';
-    return `<div class="seg" role="group"><button aria-pressed="${seg === 'earn'}" data-act="seg" data-v="earn">הכנסות</button><button aria-pressed="${seg === 'ref'}" data-act="seg" data-v="ref">חבר מביא חבר</button></div>
-      ${seg === 'earn' ? `<section class="card">
+    const showRef = F('referral') && seg === 'ref';
+    return `${F('referral') ? `<div class="seg" role="group"><button aria-pressed="${seg === 'earn'}" data-act="seg" data-v="earn">הכנסות</button><button aria-pressed="${seg === 'ref'}" data-act="seg" data-v="ref">חבר מביא חבר</button></div>` : ''}
+      ${!showRef ? `<section class="card">
           <div class="row between"><span class="lbl-s">לתשלום על החודש</span><span class="tag">${monthName(today().slice(0,7))}</span></div>
           <div class="big num" style="margin:6px 0 14px">${money(total)}</div>
           <div class="lbl-s" style="margin-bottom:6px">ניקיונות ${money(w.task_total)}</div>
           <div class="bar"><i style="width:${total ? w.task_total / total * 100 : 0}%"></i></div>
-          <div class="lbl-s" style="margin:12px 0 6px">עמלות שותפים ${money(w.referral_payable)}${w.unlocked ? '' : ' (נעול)'}</div>
-          <div class="bar"><i style="width:${total ? w.referral_payable / total * 100 : 0}%;background:var(--forest2)"></i></div>
+          ${F('referral') || +w.referral_payable ? `<div class="lbl-s" style="margin:12px 0 6px">עמלות שותפים ${money(w.referral_payable)}${w.unlocked ? '' : ' (נעול)'}</div>
+          <div class="bar"><i style="width:${total ? w.referral_payable / total * 100 : 0}%;background:var(--forest2)"></i></div>` : ''}
           <p class="hint" style="text-align:right">התשלום מועבר בתחילת החודש הבא, על כל מה שאושר החודש.</p>
         </section>
         ${+w.pending_review ? `<div class="alert green">עוד ${money(w.pending_review)} ממתינים לאישור בקרת האיכות.</div>` : ''}
@@ -1002,6 +1018,9 @@ V.cleaner = {
   },
   track(){
     const p = S.profile, s = S.data.settings;
+    if (!F('deposit')) return `<section class="card"><div class="person"><span class="av">${p.avatar_url ? `<img src="${esc(p.avatar_url)}" alt="">` : initials(p.full_name)}</span><div class="info"><h3>${esc(p.full_name)}</h3><div class="kv"><span>${esc(p.email || '')}</span><span dir="ltr">${esc(p.phone || '')}</span>${p.business_type ? `<span>${BIZ[p.business_type]}</span>` : ''}</div></div></div></section>
+      <section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.check} הנהלים</h3></div><ul class="perks" style="margin:0"><li>עמידה בחלון הזמנים, בין 11:00 ל-15:00.</li><li>צילום נזקים לפני תחילת העבודה.</li><li>תיעוד מלא של התוצאה בסיום.</li></ul></section>
+      <button class="btn ghost" style="margin-top:12px;background:#fff;box-shadow:none" data-act="signout">יציאה מהחשבון</button>`;
     return `${p.is_verified ? `<section class="card lime"><span class="vbadge"><i>★</i>מנקה מאומת/ת</span>
           <ul class="perks"><li>קדימות מוחלטת למשימות בטרמינל.</li><li>תעריף מקסימלי בכל דירה.</li><li>חשיפה ראשונה למשימות חדשות.</li></ul>
           <p class="muted small" style="margin-top:10px">ערבון של ${money(s.deposit_amount)} מופקד ומוחזר בסיום ההתקשרות.</p></section>`
@@ -1057,7 +1076,7 @@ V.admin = {
     const [profiles, aps, complexes, day, qa, month, settings, pay] = await Promise.all([
       api.profiles(), api.apartments(), api.complexes(), api.tasksOn(S.adminDate), api.qaTasks(), api.monthTasks(S.finMonth), api.settings(), api.rpc('payout_preview', {p_month:S.payMonth + '-01'})
     ]);
-    Object.assign(S.data, {profiles, aps, complexes, day, qa, month, settings, pay});
+    Object.assign(S.data, {profiles, aps, complexes, day, qa, month, settings, pay}); S.cfg = settings;
   },
   name(id){ return S.data.profiles.find(p => p.id === id)?.full_name || '—'; },
   html(){
@@ -1081,6 +1100,7 @@ V.admin = {
         <div class="datebox"><button data-act="day" data-n="1" aria-label="יום קודם">›</button><input type="date" value="${td}" data-change="date" aria-label="תאריך"><button data-act="day" data-n="-1" aria-label="יום הבא">‹</button></div>
         <b>${fmtDate(td)}</b><span class="sp" style="flex:1"></span>
         ${missing.length ? `<button class="btn sm lagoon" data-act="genDay">שיבוץ כל הדירות הפעילות (${missing.length})</button>` : ''}
+        ${d.aps.some(a => a.ical_url) ? `<button class="btn sm ghost" style="background:#fff" data-act="syncIcal">${ICON.cal.replace('<svg','<svg width="18" height="18"')} סנכרון Airbnb</button>` : ''}
         <button class="btn sm ghost" data-act="addTask">הוספת ניקיון</button>
       </div>
       <div class="stats">
@@ -1093,16 +1113,16 @@ V.admin = {
         ${groups[g].map(t => { const a = t.apartment || {}; const prem = a.is_premium || a.complex?.is_premium; const pc = d.profiles.find(p => p.id === t.primary_cleaner);
           const locked = ['in_progress','submitted','approved'].includes(t.status);
           return `<div class="slot ${t.status === 'requested' ? 'req' : ''}">
-            <div class="nm">${esc(a.name)}<small>${win(t)}${t.is_urgent ? ', דחוף' : ''}${t.is_extra ? ', הזמנת בעל הדירה' : ''}</small></div>
+            <div class="nm">${esc(a.name)}<small>${win(t)}${t.is_urgent ? ', דחוף' : ''}${t.is_extra ? ', הזמנת בעל הדירה' : ''}${t.source === 'ical' ? ', מיומן Airbnb' : ''}</small></div>
             ${chip(t.status)}
             <span class="lblsel">מנקה ראשי</span><select class="${t.primary_cleaner ? '' : 'need'}" data-change="assign" data-id="${t.id}" data-f="primary_cleaner" ${locked ? 'disabled' : ''} aria-label="מנקה ראשי">${opts(t.primary_cleaner, t.backup_cleaner)}</select>
             <span class="lblsel">גיבוי (כוננות הקפצה)</span><select data-change="assign" data-id="${t.id}" data-f="backup_cleaner" ${locked ? 'disabled' : ''} aria-label="מנקה גיבוי">${opts(t.backup_cleaner, t.primary_cleaner)}</select>
             ${['pending','requested'].includes(t.status) ? `<button class="btn xs ghost" data-act="delTask" data-id="${t.id}" aria-label="ביטול ניקיון">ביטול</button>` : '<span></span>'}
-            ${prem && pc && !pc.is_verified ? `<p class="warn">דירת פרימיום משובצת למנקה לא מאומת/ת. כדאי להעדיף ★ מאומתים.</p>` : ''}
+            ${F('deposit') && prem && pc && !pc.is_verified ? `<p class="warn">דירת פרימיום משובצת למנקה לא מאומת/ת. כדאי להעדיף ★ מאומתים.</p>` : ''}
             ${t.request_note ? `<p class="warn">הערת בעל הדירה: ${esc(t.request_note)}</p>` : ''}
           </div>`; }).join('')}</section>`).join('')
         : `<div class="card empty"><h3>אין ניקיונות ביום הזה</h3><p>אפשר לשבץ בלחיצה את כל הדירות הפעילות, או להוסיף ניקיון בודד.</p></div>`}
-      <p class="muted small" style="margin-top:16px">★ מנקה מאומת/ת (פיקדון ${money(d.settings.deposit_amount)}). משימה בלי מנקה מופיעה בלוח הפתוח: למאומתים מיד, לשאר אחרי ${d.settings.pool_delay_hours} שעות, ודירות פרימיום למאומתים בלבד.</p>`;
+      <p class="muted small" style="margin-top:16px">${F('deposit') ? `★ מנקה מאומת/ת (פיקדון ${money(d.settings.deposit_amount)}). משימה בלי מנקה מופיעה בלוח הפתוח: למאומתים מיד, לשאר אחרי ${d.settings.pool_delay_hours} שעות, ודירות פרימיום למאומתים בלבד.` : 'משימה בלי מנקה מופיעה מיד בלוח הפתוח, וכל מנקה מאושר יכול לקחת אותה.'} ${d.aps.some(a => a.ical_url) ? 'דירות עם יומן Airbnb מסתנכרנות אוטומטית כל שעה.' : ''}</p>`;
   },
   qaView(){
     const d = S.data, sub = d.qa.filter(t => t.status === 'submitted'), done = d.qa.filter(t => t.status === 'approved');
@@ -1156,7 +1176,9 @@ V.admin = {
         <label class="f"><span>תקרת עמלות: % מהכנסת הניקיון (0 = ללא)</span><input class="inp" name="cap_pct" type="number" min="0" max="500" value="${Math.round(s.referral_cap_ratio * 100)}"></label>
         <label class="f"><span>תקרת עמלות חודשית לאדם (₪, 0 = ללא)</span><input class="inp" name="referral_monthly_cap" type="number" min="0" value="${s.referral_monthly_cap}"></label>
         <label class="f"><span>חודשי עמלה לכל חבר (0 = ללא הגבלה)</span><input class="inp" name="referral_months" type="number" min="0" value="${s.referral_months}"></label>
-      </div><button class="btn sm lagoon" type="submit">שמירת הגדרות</button></form>`;
+      </div>
+      <ul class="checks"><li><label><input type="checkbox" name="feature_deposit" ${s.feature_deposit ? 'checked' : ''}><span>מסלול מאומת עם פיקדון</span></label></li><li><label><input type="checkbox" name="feature_referral" ${s.feature_referral ? 'checked' : ''}><span>תוכנית חבר מביא חבר</span></label></li></ul>
+      <button class="btn sm lagoon" type="submit">שמירת הגדרות</button></form>`;
   },
   payView(){
     const d = S.data, s = d.settings, rows = d.pay, cur = today().slice(0,7), closed = S.payMonth < cur;
@@ -1204,9 +1226,9 @@ V.admin = {
         ${cleaners.map(p => `<div class="card person"><span class="av">${initials(p.full_name)}</span><div class="info">
           <div class="row between"><h3>${esc(p.full_name)} ${p.is_verified ? '<span class="tag gold">★ מאומת</span>' : ''}</h3>${p.status !== 'approved' ? chip('pending') : ''}</div>
           <div class="kv"><span>הביא/ה <b>${refCount(p.id)}</b></span>${p.referred_by ? `<span>הופנה ע״י <b>${esc(this.name(p.referred_by))}</b></span>` : ''}<span dir="ltr">${esc(p.phone || '')}</span></div>
-          <div class="row" style="margin-top:10px"><label class="small muted">פיקדון</label>
+          ${!F('deposit') ? '' : `<div class="row" style="margin-top:10px"><label class="small muted">פיקדון</label>
             <select class="inp" style="min-height:38px;width:auto;padding:0 8px" data-change="deposit" data-id="${p.id}">${[['none','לא הופקד'], ['requested','ביקש/ה להצטרף'], ['paid','הופקד'], ['refunded','הוחזר']].map(([v, l]) => `<option value="${v}" ${p.deposit_status === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
-            <button class="btn xs ${p.is_verified ? 'ghost' : 'lagoon'}" data-act="verify" data-id="${p.id}" data-v="${p.is_verified ? '' : 1}">${p.is_verified ? 'ביטול אימות' : 'סמן כמאומת'}</button></div></div></div>`).join('') || '<p class="muted">אין עדיין מנקים.</p>'}
+            <button class="btn xs ${p.is_verified ? 'ghost' : 'lagoon'}" data-act="verify" data-id="${p.id}" data-v="${p.is_verified ? '' : 1}">${p.is_verified ? 'ביטול אימות' : 'סמן כמאומת'}</button></div>`}</div></div>`).join('') || '<p class="muted">אין עדיין מנקים.</p>'}
       </section><section><div class="sec-h"><h2>בעלי דירות</h2><span class="muted">${hosts.length}</span></div>
         ${hosts.map(p => `<div class="card person"><span class="av">${initials(p.full_name)}</span><div class="info"><h3>${esc(p.full_name)}</h3>
           <div class="kv"><span>${d.aps.filter(a => a.host_id === p.id).length} דירות</span><span dir="ltr">${esc(p.phone || '')}</span><span>${esc(p.email || '')}</span></div></div></div>`).join('') || '<p class="muted">אין עדיין בעלי דירות.</p>'}
@@ -1217,7 +1239,7 @@ V.admin = {
     return `<div class="row between" style="margin-bottom:12px"><h2 style="font-size:22px;font-weight:800">דירות ומתחמים</h2><button class="btn sm lagoon" data-act="aptForm">הוספת דירה</button></div>
       ${d.complexes.map(c => { const list = d.aps.filter(a => a.complex_id === c.id); return `<section class="grp"><div class="grp-h">${esc(c.name)} ${c.is_premium ? '<span class="tag gold">פרימיום</span>' : ''}<span class="muted small">${list.length}</span></div>
         ${list.map(a => `<div class="slot" style="grid-template-columns:1fr auto auto"><div class="nm">${esc(a.name)}<small>${esc(a.address || '')}${a.host_id ? ', ' + esc(this.name(a.host_id)) : ', ללא בעל דירה'}</small></div>
-          <span class="small">${money(a.host_price)} / ${money(a.rate_base)}–${money(a.rate_max)}${a.active ? '' : ' <span class="tag red">לא פעילה</span>'}</span>
+          <span class="small">${money(a.host_price)} / ${money(a.rate_base)}${F('deposit') ? '–' + money(a.rate_max) : ''}${a.active ? '' : ' <span class="tag red">לא פעילה</span>'}${a.ical_error ? ' <span class="tag red">שגיאת יומן</span>' : a.ical_url ? ' <span class="tag gold">Airbnb מחובר</span>' : ''}</span>
           <button class="btn xs ghost" data-act="aptForm" data-id="${a.id}">עריכה</button></div>`).join('') || '<p class="muted small">אין דירות במתחם.</p>'}</section>`; }).join('')}
       ${d.aps.filter(a => !a.complex_id).length ? `<section class="grp"><div class="grp-h">ללא מתחם</div>${d.aps.filter(a => !a.complex_id).map(a => `<div class="slot" style="grid-template-columns:1fr auto"><div class="nm">${esc(a.name)}</div><button class="btn xs ghost" data-act="aptForm" data-id="${a.id}">עריכה</button></div>`).join('')}</section>` : ''}
       <form class="card row" style="margin-top:20px" data-submit="complex"><input class="inp" name="name" required placeholder="שם מתחם חדש" style="flex:1;min-width:160px"><label class="row small"><input type="checkbox" name="prem"> פרימיום</label><button class="btn sm ghost" type="submit">הוספת מתחם</button></form>`;
@@ -1233,6 +1255,7 @@ V.admin = {
       <label class="f"><span>תעריף מנקה רגיל</span><input class="inp" name="rate_base" type="number" required value="${a.rate_base ?? 120}"></label>
       <label class="f"><span>תעריף מנקה מאומת</span><input class="inp" name="rate_max" type="number" required value="${a.rate_max ?? 150}"></label>
       <label class="f"><span>קוד כניסה</span><input class="inp" name="entry_code" value="${esc(a.secret?.entry_code || '')}" dir="ltr" autocomplete="off"></label></div>
+      <label class="f"><span>קישור יומן Airbnb / Booking (iCal)</span><input class="inp" name="ical_url" type="url" dir="ltr" placeholder="https://www.airbnb.com/calendar/ical/....ics" value="${esc(a.ical_url || '')}"><small class="muted" style="display:block;margin-top:4px">ב-Airbnb: לוח שנה ← זמינות ← חיבור לוחות שנה ← ייצוא. כל צ'ק-אאוט ייצור ניקיון אוטומטית.${a.ical_synced_at ? ' סונכרן לאחרונה: ' + new Date(a.ical_synced_at).toLocaleString('he-IL') : ''}${a.ical_error ? ' שגיאה: ' + esc(a.ical_error) : ''}</small></label>
       <label class="f"><span>הנחיות כספת / מפתח</span><input class="inp" name="lockbox_notes" value="${esc(a.secret?.lockbox_notes || '')}"></label>
       <div class="row" style="margin-bottom:14px"><label class="row"><input type="checkbox" name="is_premium" ${a.is_premium ? 'checked' : ''}> דירת פרימיום</label><label class="row"><input type="checkbox" name="active" ${a.active !== false ? 'checked' : ''}> פעילה</label></div>
       <div class="row"><button class="btn lagoon" type="submit" style="flex:1">שמירה</button><button class="btn ghost sm" type="button" data-act="closeModal" data-force="1">ביטול</button></div></form>`;
@@ -1400,6 +1423,11 @@ const ACT = {
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'})); a.download = `cleaneilat-payouts-${S.payMonth}.csv`; document.body.appendChild(a); a.click(); a.remove();
     toast('הקובץ ירד');
   },
+  async syncIcal(el){
+    el.disabled = true; el.textContent = 'מסנכרן…';
+    await run(async () => { const r = await syncNow(); await refresh(true);
+      toast(r.errors?.length ? 'שגיאה ביומן: ' + r.errors[0] : `סונכרנו ${r.apartments} דירות: ${r.created} ניקיונות חדשים${r.moved ? `, ${r.moved} הוזזו` : ''}${r.cancelled ? `, ${r.cancelled} בוטלו` : ''}`); });
+  },
   aptForm(el){ const a = el.dataset.id ? S.data.aps.find(x => x.id === el.dataset.id) : {}; S.modal = V.admin.aptForm(a); paint(); }
 };
 const CHG = {
@@ -1452,18 +1480,21 @@ const SUB = {
   },
   async settings(f){
     const v = k => +f[k].value;
-    await run(async () => { await api.upd('settings', 1, {referral_fee:v('referral_fee'), urgent_surcharge:v('urgent_surcharge'), pool_delay_hours:v('pool_delay_hours'), deposit_amount:v('deposit_amount'), referral_cap_ratio:v('cap_pct') / 100, referral_monthly_cap:v('referral_monthly_cap'), referral_months:v('referral_months'), updated_at:nowIso()}); await refresh(true); }, 'ההגדרות נשמרו');
+    await run(async () => { await api.upd('settings', 1, {referral_fee:v('referral_fee'), urgent_surcharge:v('urgent_surcharge'), pool_delay_hours:v('pool_delay_hours'), deposit_amount:v('deposit_amount'), referral_cap_ratio:v('cap_pct') / 100, referral_monthly_cap:v('referral_monthly_cap'), referral_months:v('referral_months'), feature_deposit:f.feature_deposit.checked, feature_referral:f.feature_referral.checked, updated_at:nowIso()}); await refresh(true); }, 'ההגדרות נשמרו');
   },
   async complex(f){ await run(async () => { await api.ins('complexes', {name:f.name.value.trim(), is_premium:f.prem.checked, sort:S.data.complexes.length + 1}); await refresh(true); }, 'המתחם נוסף'); },
   async apt(f){
     const id = f.dataset.id;
-    const row = {name:f.name.value.trim(), complex_id:f.complex_id.value || null, host_id:f.host_id.value || null, address:f.address.value.trim(), host_price:+f.host_price.value, rate_base:+f.rate_base.value, rate_max:+f.rate_max.value, is_premium:f.is_premium.checked, active:f.active.checked};
+    const row = {name:f.name.value.trim(), complex_id:f.complex_id.value || null, host_id:f.host_id.value || null, address:f.address.value.trim(), host_price:+f.host_price.value, rate_base:+f.rate_base.value, rate_max:+f.rate_max.value, is_premium:f.is_premium.checked, active:f.active.checked, ical_url:(f.ical_url.value.trim() || null)};
+    if (row.ical_url && !/^https:\/\/.+/i.test(row.ical_url)) return toast('קישור היומן צריך להתחיל ב-https://', 'err');
     await run(async () => {
       let aptId = id;
       if (id) await api.upd('apartments', id, row); else aptId = (await api.ins('apartments', row)).id;
       await api.secret(aptId, {entry_code:f.entry_code.value.trim(), lockbox_notes:f.lockbox_notes.value.trim()});
-      S.modal = null; await refresh(true);
-    }, 'הדירה נשמרה');
+      S.modal = null;
+      if (row.ical_url && !DEMO) { const r = await syncNow(aptId); toast(r.errors?.length ? 'הדירה נשמרה, אבל היומן לא נקרא: ' + r.errors[0] : `הדירה נשמרה. נוצרו ${r.created} ניקיונות מהיומן`); }
+      await refresh(true);
+    }, row.ical_url && !DEMO ? null : 'הדירה נשמרה');
   }
 };
 document.addEventListener('click', e => {
@@ -1502,7 +1533,7 @@ function live(){
 }
 async function boot(){
   try {
-    if (DEMO) { if (!D.tasks) D.init(); S.profile = D.me(); return route(); }
+    if (DEMO) { if (!D.tasks) D.init(); S.cfg = D.settings; S.profile = D.me(); return route(); }
     if (!window.supabase) { S.profile = null; route(); return toast('לא הצלחנו להתחבר לשרת. בדקו את החיבור לאינטרנט.', 'err'); }
     if (!sb) {
       sb = supabase.createClient(CFG.url, CFG.key, {auth:{persistSession:true, detectSessionInUrl:true, flowType:'pkce'}});
@@ -1513,6 +1544,7 @@ async function boot(){
     }
     const errDesc = qs.get('error_description') || new URLSearchParams(location.hash.slice(1)).get('error_description');
     if (errDesc) { toast('ההתחברות נכשלה: ' + errDesc, 'err'); history.replaceState(null, '', location.pathname); }
+    try { S.cfg = await q(sb.from('settings').select('*').eq('id', 1).single()); } catch { S.cfg = {}; }
     S.profile = await api.me();
     if (location.search.includes('code=')) history.replaceState(null, '', location.pathname + (qs.has('demo') ? '?demo' : ''));
     route(); live();
