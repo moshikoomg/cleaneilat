@@ -52,23 +52,40 @@ export function parseIcs(text: string): Ev[] {
 
 const isBlock = (s: string) => /not available|blocked|closed|unavailable/i.test(s);
 
-async function authorize(req: Request): Promise<boolean> {
+type Caller = { kind: "cron" | "admin" | "host"; uid?: string } | null;
+
+async function authorize(req: Request): Promise<Caller> {
   const cron = req.headers.get("x-cron-key");
   if (cron) {
     const { data } = await db.from("app_secrets").select("value").eq("name", "cron_key").single();
-    return !!data && data.value === cron;
+    return !!data && data.value === cron ? { kind: "cron" } : null;
   }
   const token = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
-  if (!token) return false;
+  if (!token) return null;
   const { data: u } = await db.auth.getUser(token);
-  if (!u?.user) return false;
-  const { data: p } = await db.from("profiles").select("role").eq("id", u.user.id).single();
-  return p?.role === "admin";
+  if (!u?.user) return null;
+  const { data: p } = await db.from("profiles").select("role,status").eq("id", u.user.id).single();
+  if (p?.role === "admin") return { kind: "admin", uid: u.user.id };
+  if (p?.role === "host" && p?.status === "approved") return { kind: "host", uid: u.user.id };
+  return null;
+}
+
+// only public https calendar links: no IP literals, no local names
+function safeUrl(raw: string): boolean {
+  try {
+    const u = new URL(raw);
+    if (u.protocol !== "https:") return false;
+    const h = u.hostname.toLowerCase();
+    if (!h.includes(".") || h.endsWith(".local") || h.endsWith(".internal") || h === "localhost") return false;
+    if (/^[\d.]+$/.test(h) || h.includes(":")) return false;
+    return true;
+  } catch { return false; }
 }
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
-  if (!(await authorize(req))) return json({ error: "unauthorized" }, 401);
+  const caller = await authorize(req);
+  if (!caller) return json({ error: "unauthorized" }, 401);
 
   const body = await req.json().catch(() => ({}));
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(new Date());
@@ -78,6 +95,7 @@ Deno.serve(async (req) => {
 
   let q = db.from("apartments").select("id,name,ical_url").not("ical_url", "is", null).eq("active", true);
   if (body.apartment_id) q = q.eq("id", body.apartment_id);
+  if (caller.kind === "host") q = q.eq("host_id", caller.uid!);
   const { data: aps, error } = await q;
   if (error) return json({ error: error.message }, 500);
 
@@ -85,6 +103,7 @@ Deno.serve(async (req) => {
   for (const ap of aps || []) {
     report.apartments++;
     try {
+      if (!safeUrl(ap.ical_url)) throw new Error("קישור היומן לא תקין. צריך קישור https מ-Airbnb או Booking");
       const res = await fetch(ap.ical_url, { headers: { "User-Agent": "CleanEilat-Sync/1.0" } });
       if (!res.ok) throw new Error(`היומן החזיר שגיאה ${res.status}`);
       const text = await res.text();
@@ -106,7 +125,8 @@ Deno.serve(async (req) => {
           });
           if (!ie) report.created++;
         } else if (t.task_date !== e.end && ["pending", "requested", "cancelled"].includes(t.status)) {
-          await db.from("tasks").update({ task_date: e.end, status: "pending" }).eq("id", t.id);
+          // the date changed: the cleaner has to confirm the new date again
+          await db.from("tasks").update({ task_date: e.end, status: "pending", ...(t.primary_cleaner ? { offer_status: "offered" } : {}) }).eq("id", t.id);
           report.moved++;
         } else if (t.status === "cancelled") {
           await db.from("tasks").update({ status: "pending" }).eq("id", t.id);

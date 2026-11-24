@@ -383,12 +383,12 @@ const ST = {
   pending:    ['ממתין','gray'],
   arrived:    ['המנקה בדירה','orange'],
   in_progress:['בניקיון כעת','orange'],
-  submitted:  ['בבקרת איכות','orange'],
+  submitted:  ['מחכה לאישור','orange'],
   needs_fix:  ['דרוש תיקון','red'],
   approved:   ['מוכן לאורחים','green'],
   cancelled:  ['בוטל','gray']
 };
-const payOf = t => { const a = t.apartment || {}; return +(t.cleaner_pay ?? t.price ?? (F('deposit') && S.profile?.is_verified ? a.rate_max : a.rate_base)) || 0; };
+const payOf = t => { const a = t.apartment || {}; return +(t.price ?? t.cleaner_pay ?? (F('deposit') && S.profile?.is_verified ? a.rate_max : a.rate_base)) || 0; };
 const F = k => !!(S.cfg && S.cfg['feature_' + k]);
 const chip = s => `<span class="chip ${ST[s]?.[1] || 'gray'}">${ST[s]?.[0] || esc(s)}</span>`;
 const hostState = s => ['approved'].includes(s) ? ['מוכן לאורחים','green'] : ['arrived','in_progress','submitted','needs_fix'].includes(s) ? ['בניקיון כעת','orange'] : ['ממתין','gray'];
@@ -425,11 +425,11 @@ const D = {
     const P = (id, o) => Object.assign({id, email:id + '@demo.co.il', phone:'050-0000000', status:'approved', is_verified:false, deposit_status:'none', referral_code:id.toUpperCase() + '77', referred_by:null, onboarding:{}, created_at:addDays(td,-40) + 'T08:00:00Z'}, o);
     this.profiles = [
       P('a1',{full_name:'משה', role:'admin'}),
-      P('c1',{full_name:'דנה לוי', role:'cleaner', is_verified:true, deposit_status:'paid', business_type:'osek_zair', business_number:'312456789'}),
-      P('c2',{full_name:'יוסי מזרחי', role:'cleaner', referred_by:'c1', business_type:'osek_zair'}),
-      P('c3',{full_name:'מרים אבוטבול', role:'cleaner', referred_by:'c1', business_type:'osek_murshe'}),
-      P('c4',{full_name:'אלכס פטרוב', role:'cleaner', deposit_status:'requested', business_type:'osek_zair'}),
-      P('h1',{full_name:'רונית כהן', role:'host'}),
+      P('c1',{full_name:'דנה לוי', role:'cleaner', business_type:'osek_zair', business_number:'312456789', area:'שחמון', bio:'4 שנים בניקיון דירות נופש בטרמינל ובשחמון. מגיעה עם חומרים.', prices:{studio:120, '1':150, '2':180, '3':230}, payment_info:'ביט 050-1234567', rating:4.9, rating_count:23}),
+      P('c2',{full_name:'יוסי מזרחי', role:'cleaner', business_type:'osek_zair', area:'מרכז העיר', prices:{studio:110, '1':140, '2':170}, payment_info:'ביט 052-7654321', rating:4.6, rating_count:9}),
+      P('c3',{full_name:'מרים אבוטבול', role:'cleaner', business_type:'osek_murshe', area:'צופית', bio:'ניסיון במלונות. זמינה גם בסופי שבוע.', prices:{'1':160, '2':190, '3':240}, payment_info:'העברה בנקאית', rating:5, rating_count:4}),
+      P('c4',{full_name:'אלכס פטרוב', role:'cleaner', business_type:'osek_zair', area:'שחמון', prices:{studio:100, '1':130}, payment_info:'ביט'}),
+      P('h1',{full_name:'רונית כהן', role:'host', sub_status:'trial', trial_ends:addDays(td,19)}),
       P('n1',{full_name:'', role:'pending', status:'new', email:'new.user@gmail.com'}),
       P('n2',{full_name:'אבי שושן', role:'pending', status:'submitted', desired_role:'cleaner', phone:'052-7788990', business_type:'osek_zair', business_number:'204551876', id_doc_path:'demo', business_doc_path:'demo', referred_by:'c1', onboarding:{experience:'1–3 שנים', days:['א','ב','ג','ה'], car:'יש לי רכב', area:'שחמון', source:'חבר/ה'}})
     ];
@@ -437,13 +437,13 @@ const D = {
       {id:'x1', name:'הטרמינל', is_premium:true, sort:1}, {id:'x2', name:'שחמון', is_premium:false, sort:2},
       {id:'x3', name:'צופית', is_premium:false, sort:3}, {id:'x4', name:'מרכז העיר', is_premium:false, sort:4}
     ];
-    const A = (id, o) => Object.assign({id, host_id:'h1', host_price:260, rate_base:120, rate_max:150, is_premium:false, active:true}, o);
+    const A = (id, o) => Object.assign({id, host_id:'h1', host_price:260, rate_base:120, rate_max:150, is_premium:false, active:true, size:'1', cleaner_id:null}, o);
     this.apartments = [
-      A('ap1',{ical_url:'https://www.airbnb.com/calendar/ical/demo.ics', ical_synced_at:nowIso(), name:'הטרמינל, סוויטה 12', complex_id:'x1', address:'שדרות התמרים 5', host_price:320, rate_base:140, rate_max:175, is_premium:true}),
+      A('ap1',{ical_url:'https://www.airbnb.com/calendar/ical/demo.ics', ical_synced_at:nowIso(), cleaner_id:'c1', name:'הטרמינל, סוויטה 12', complex_id:'x1', address:'שדרות התמרים 5', host_price:320, rate_base:140, rate_max:175, is_premium:true}),
       A('ap2',{name:'הטרמינל, דירה 31', complex_id:'x1', address:'שדרות התמרים 5', host_price:300, rate_base:130, rate_max:165, is_premium:true}),
-      A('ap3',{name:'גן ים, דירת גן', complex_id:'x2', address:'הדקל 14'}),
+      A('ap3',{name:'גן ים, דירת גן', complex_id:'x2', address:'הדקל 14', size:'2', cleaner_id:'c2'}),
       A('ap4',{name:'נוף הרים 7', complex_id:'x2', address:'אדמונית 7'}),
-      A('ap5',{name:'פנטהאוז צופית', complex_id:'x3', address:'הנחליאלי 3', host_price:340, rate_base:150, rate_max:180}),
+      A('ap5',{name:'פנטהאוז צופית', complex_id:'x3', address:'הנחליאלי 3', host_price:340, rate_base:150, rate_max:180, size:'3', cleaner_id:'c1', notes:'מצעים נקיים בארון בחדר השינה הגדול'}),
       A('ap6',{name:'סטודיו המרינה', complex_id:'x4', address:'שדרות ירושלים 22', host_id:null, host_price:220, rate_base:100, rate_max:125})
     ];
     this.secrets = {ap1:{entry_code:'4821', lockbox_notes:'כספת אפורה מימין לדלת, קוד 1907'}, ap2:{entry_code:'7730', lockbox_notes:'מפתח בתיבת דואר 31'}, ap3:{entry_code:'1144', lockbox_notes:''}, ap4:{entry_code:'5090', lockbox_notes:''}, ap5:{entry_code:'2468', lockbox_notes:'חניה 14 שמורה למנקה'}, ap6:{entry_code:'3300', lockbox_notes:''}};
@@ -460,6 +460,12 @@ const D = {
       T('t7',{apartment_id:'ap1', task_date:addDays(td,1), primary_cleaner:'c1'})
     ];
     for (let i = 1; i <= 9; i++) this.tasks.push(T('h' + i, {apartment_id:['ap1','ap3','ap4','ap5','ap2'][i % 5], task_date:addDays(td,-i - 1), primary_cleaner:['c1','c2','c3'][i % 3], status:'approved', approved_at:addDays(td,-i - 1) + 'T12:00:00Z', photos:full(160 + i * 9), host_price:[320,260,260,340,300][i % 5], cleaner_pay:[175,120,120,180,165][i % 5], referral_fee:i % 3 ? 10 : 0}));
+    this.tasks.forEach(t => { const ap = this.apartments.find(x => x.id === t.apartment_id), c = this.prof(t.primary_cleaner);
+      t.host_id = ap.host_id; t.price ??= t.cleaner_pay ?? (c ? +c.prices?.[ap.size] || null : null); t.offer_status = t.primary_cleaner ? 'accepted' : 'none';
+      if (t.status === 'approved' && t.task_date < td) t.paid_at = t.id === 'h1' ? null : t.approved_at; });
+    Object.assign(this.tasks.find(t => t.id === 't7'), {offer_status:'offered', request_note:'אורחים מגיעים ב-15:00'});
+    Object.assign(this.tasks.find(t => t.id === 't5'), {status:'pending', is_urgent:false});
+    this.connections = [{host_id:'h1', cleaner_id:'c1', status:'accepted'}, {host_id:'h1', cleaner_id:'c2', status:'accepted'}, {host_id:'h1', cleaner_id:'c3', status:'pending'}];
     this.wallet = [];
     this.tasks.filter(t => t.status === 'approved').forEach(t => {
       this.wallet.push({id:uid(), user_id:t.primary_cleaner, task_id:t.id, kind:'task', amount:t.cleaner_pay, created_at:t.approved_at});
@@ -468,7 +474,7 @@ const D = {
     const lm = addDays(td.slice(0,8) + '01', -5) + 'T12:00:00Z';
     [['c1','task',3850],['c1','referral',420],['c2','task',300],['c2','referral',4300],['c3','task',2600],['c4','task',1900]].forEach(([u,k,a]) => this.wallet.push({id:uid(), user_id:u, kind:k, amount:a, created_at:lm}));
     this.payouts = [];
-    this.settings = {id:1, referral_fee:10, urgent_surcharge:80, pool_delay_hours:3, deposit_amount:1500, referral_cap_ratio:0, referral_monthly_cap:0, referral_months:0, feature_deposit:false, feature_referral:false};
+    this.settings = {id:1, monthly_fee:49, trial_days:30, referral_fee:10, urgent_surcharge:80, pool_delay_hours:3, deposit_amount:1500, referral_cap_ratio:0, referral_monthly_cap:0, referral_months:0, feature_deposit:false, feature_referral:false};
   },
   me(){ return this.profiles.find(p => p.id === ({admin:'a1', cleaner:'c1', host:'h1', new:'n1'})[this.cur]); },
   calc(uid, ym){
@@ -489,6 +495,8 @@ const D = {
     const err = m => { throw new Error(m); };
     switch (fn) {
       case 'reveal_entry_code':
+        if (t.offer_status === 'offered') err('קודם צריך לאשר את הניקיון');
+        if (t.task_date > today()) err('הקוד ייחשף ביום הניקיון');
         if (['pending','requested'].includes(t.status)) { t.status = 'arrived'; t.arrived_at = nowIso(); }
         return {code:this.secrets[t.apartment_id]?.entry_code, notes:this.secrets[t.apartment_id]?.lockbox_notes};
       case 'start_cleaning':
@@ -507,11 +515,46 @@ const D = {
         return; }
       case 'admin_needs_fix': Object.assign(t, {status:'needs_fix', admin_note:a.p_note}); return;
       case 'open_pool':
-        return this.tasks.filter(x => !x.primary_cleaner && ['pending','requested'].includes(x.status) && x.task_date >= today()).map(x => {
-          const j = this.join(x), prem = j.apartment.is_premium || j.apartment.complex?.is_premium;
-          return {id:x.id, task_date:x.task_date, window_start:x.window_start, window_end:x.window_end, is_urgent:x.is_urgent, apartment:j.apartment.name, complex:j.apartment.complex?.name, address:j.apartment.address, is_premium:prem, pay:me.is_verified ? j.apartment.rate_max : j.apartment.rate_base};
-        }).filter(x => me.is_verified || !x.is_premium);
-      case 'claim_task': t.primary_cleaner = me.id; t.status = 'pending'; return;
+        return this.tasks.filter(x => !x.primary_cleaner && x.status === 'pending' && x.task_date >= today()).map(x => { const j = this.join(x);
+          return {id:x.id, task_date:x.task_date, window_start:x.window_start, window_end:x.window_end, apartment:j.apartment.name, complex:j.apartment.complex?.name, address:j.apartment.address, size:j.apartment.size, pay:+me.prices?.[j.apartment.size] || null}; });
+      case 'claim_task': { const ap = this.apartments.find(x => x.id === t.apartment_id), pr = +me.prices?.[ap.size];
+        if (t.primary_cleaner) err('הניקיון כבר נתפס'); if (!pr) err('קבעו קודם מחיר לגודל הדירה הזה בפרופיל');
+        Object.assign(t, {primary_cleaner:me.id, price:pr, offer_status:'accepted'});
+        const c = this.connections.find(x => x.host_id === ap.host_id && x.cleaner_id === me.id); if (c) c.status = 'accepted'; else if (ap.host_id) this.connections.push({host_id:ap.host_id, cleaner_id:me.id, status:'accepted'});
+        return; }
+      case 'respond_task': if (t.offer_status !== 'offered') err('ההצעה כבר לא בתוקף');
+        if (a.p_accept) t.offer_status = 'accepted'; else Object.assign(t, {primary_cleaner:null, price:null, offer_status:'declined'}); return;
+      case 'cleaner_earnings': { const ms = today().slice(0,7), m = this.tasks.filter(x => x.primary_cleaner === me.id && x.status === 'approved' && (x.approved_at || '').slice(0,7) === ms);
+        const sum = f => m.filter(f).reduce((s, x) => s + (+x.price || 0), 0); return {count:m.length, total:sum(() => true), paid:sum(x => x.paid_at), unpaid:sum(x => !x.paid_at)}; }
+      case 'my_contacts':
+        return this.connections.filter(c => c.host_id === me.id || c.cleaner_id === me.id).map(c => { const side = c.host_id === me.id ? 'cleaner' : 'host', o = this.prof(side === 'cleaner' ? c.cleaner_id : c.host_id), ok = c.status === 'accepted';
+          return {id:o.id, full_name:o.full_name, avatar_url:null, phone:ok ? o.phone : null, payment_info:ok && side === 'cleaner' ? o.payment_info : null, prices:side === 'cleaner' ? o.prices : null, rating:side === 'cleaner' ? o.rating : null, status:c.status, side}; });
+      case 'list_cleaners':
+        return this.profiles.filter(p => p.role === 'cleaner' && p.status === 'approved').map(p => ({id:p.id, full_name:p.full_name, avatar_url:null, area:p.area, bio:p.bio, prices:p.prices || {}, rating:p.rating, rating_count:p.rating_count || 0, connection:this.connections.find(c => c.host_id === me.id && c.cleaner_id === p.id)?.status || null}))
+          .sort((x, y) => (y.rating || 0) - (x.rating || 0));
+      case 'request_connection': { const c = this.connections.find(x => x.host_id === me.id && x.cleaner_id === a.p_cleaner); if (c) { if (c.status !== 'accepted') c.status = 'pending'; } else this.connections.push({host_id:me.id, cleaner_id:a.p_cleaner, status:'pending'}); return; }
+      case 'respond_connection': { const c = this.connections.find(x => x.host_id === a.p_host && x.cleaner_id === me.id && x.status === 'pending'); if (!c) err('אין בקשה פתוחה'); c.status = a.p_accept ? 'accepted' : 'declined'; return; }
+      case 'set_apartment_cleaner': { const ap = this.apartments.find(x => x.id === a.p_apt); ap.cleaner_id = a.p_cleaner; let n = 0;
+        if (a.p_cleaner) this.tasks.filter(x => x.apartment_id === ap.id && !x.primary_cleaner && x.status === 'pending' && x.task_date >= today()).forEach(x => { Object.assign(x, {primary_cleaner:a.p_cleaner, offer_status:'offered', price:+this.prof(a.p_cleaner).prices?.[ap.size] || null}); n++; });
+        return n; }
+      case 'create_task': { const ap = this.apartments.find(x => x.id === a.p_apt), c = ap.cleaner_id && this.connections.some(x => x.host_id === ap.host_id && x.cleaner_id === ap.cleaner_id && x.status === 'accepted') ? ap.cleaner_id : null;
+        if (a.p_date < today()) err('תאריך עבר');
+        const r = {id:uid(), apartment_id:ap.id, host_id:ap.host_id, task_date:a.p_date, window_start:'11:00', window_end:'15:00', status:'pending', source:'host', request_note:a.p_note || null, primary_cleaner:c, offer_status:c ? 'offered' : 'none', price:c ? +this.prof(c).prices?.[ap.size] || null : null, before_photos:[], photos:{}, checklist:{}, published_at:nowIso(), referral_fee:0};
+        this.tasks.push(r); return r.id; }
+      case 'cancel_task': if (!['pending','requested','arrived'].includes(t.status)) err('אי אפשר לבטל ניקיון שכבר התחיל'); t.status = 'cancelled'; return;
+      case 'host_approve': { if (t.status !== 'submitted') err('אפשר לאשר רק ניקיון שהסתיים');
+        Object.assign(t, {status:'approved', approved_at:nowIso(), rating:a.p_rating, review:a.p_review || null});
+        const c = this.prof(t.primary_cleaner), rs = this.tasks.filter(x => x.primary_cleaner === c.id && x.rating); c.rating = rs.reduce((s, x) => s + x.rating, 0) / rs.length; c.rating_count = rs.length; return; }
+      case 'host_needs_fix': if (t.status !== 'submitted') err('אפשר לבקש תיקון רק לניקיון שהסתיים'); Object.assign(t, {status:'needs_fix', admin_note:a.p_note}); return;
+      case 'mark_paid': if (t.status !== 'approved' || t.paid_at) err('כבר סומן או שהניקיון עוד לא אושר'); t.paid_at = nowIso(); return;
+      case 'update_my_profile': Object.assign(me, {full_name:a.p_full_name || me.full_name, phone:a.p_phone || me.phone, area:a.p_area, bio:a.p_bio, prices:a.p_prices ?? me.prices, payment_info:a.p_payment_info}); return;
+      case 'submit_onboarding_v2':
+        Object.assign(me, {desired_role:a.p_role, full_name:a.p_full_name, phone:a.p_phone, onboarding:a.p_answers, area:a.p_area, bio:a.p_bio, prices:a.p_prices, payment_info:a.p_payment_info, business_type:a.p_business_type, business_number:a.p_business_number, id_doc_path:a.p_id_doc_path, business_doc_path:a.p_business_doc_path});
+        if (a.p_role === 'host') Object.assign(me, {role:'host', status:'approved', sub_status:'trial', trial_ends:addDays(today(), s.trial_days)}); else me.status = 'submitted';
+        return me.status;
+      case 'admin_set_sub': this.prof(a.p_user).sub_status = a.p_status; return;
+      case 'admin_overview': { const act = this.apartments.filter(x => x.active && x.host_id), paying = act.filter(x => this.prof(x.host_id)?.sub_status === 'active').length;
+        return {hosts:this.profiles.filter(p => p.role === 'host').length, cleaners:this.profiles.filter(p => p.role === 'cleaner' && p.status === 'approved').length, pending_cleaners:this.profiles.filter(p => p.status === 'submitted').length, apartments:act.length, paying_apartments:paying, mrr:paying * s.monthly_fee, cleanings_month:this.tasks.filter(x => x.status === 'approved' && (x.approved_at || '').slice(0,7) === today().slice(0,7)).length, synced_apartments:this.apartments.filter(x => x.ical_url).length}; }
       case 'my_wallet': {
         const ms = today().slice(0,7);
         const mine = this.wallet.filter(w => w.user_id === me.id && w.created_at.slice(0,7) === ms);
@@ -546,7 +589,7 @@ const D = {
 };
 
 /* ═════════════ data layer ═════════════ */
-const TASK_SEL = '*, apartment:apartments(id,name,address,is_premium,host_id,host_price,rate_base,rate_max,complex:complexes(id,name,is_premium))';
+const TASK_SEL = '*, apartment:apartments(id,name,address,size,notes,is_premium,host_id,host_price,rate_base,rate_max,complex:complexes(id,name,is_premium))';
 async function q(p){ const {data, error} = await p; if (error) throw new Error(error.message); return data; }
 const api = {
   async me(){
@@ -565,6 +608,11 @@ const api = {
     const id = S.profile.id, from = addDays(today(), -1);
     if (DEMO) return D.tasks.filter(t => (t.primary_cleaner === id || t.backup_cleaner === id) && t.task_date >= from && t.status !== 'cancelled').map(t => D.join(t)).sort((a, b) => a.task_date.localeCompare(b.task_date));
     return q(sb.from('tasks').select(TASK_SEL).or(`primary_cleaner.eq.${id},backup_cleaner.eq.${id}`).gte('task_date', from).neq('status','cancelled').order('task_date').order('window_start'));
+  },
+  async cleanerHistory(){
+    const id = S.profile.id;
+    if (DEMO) return D.tasks.filter(t => t.primary_cleaner === id && t.status === 'approved').sort((a, b) => (b.approved_at || '').localeCompare(a.approved_at || '')).slice(0, 30).map(t => D.join(t));
+    return q(sb.from('tasks').select(TASK_SEL).eq('primary_cleaner', id).eq('status','approved').order('approved_at', {ascending:false}).limit(30));
   },
   async walletEntries(){
     if (DEMO) return D.wallet.filter(w => w.user_id === S.profile.id).sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 25);
@@ -599,15 +647,20 @@ const api = {
     return q(sb.from('payouts').select('*').eq('user_id', S.profile.id).order('period', {ascending:false}).limit(12));
   },
   async hostData(){
-    const from = addDays(today(), -14), to = addDays(today(), 30);
+    const from = addDays(today(), -30), to = addDays(today(), 90);
     if (DEMO) {
-      const aps = D.apartments.filter(a => a.host_id === S.profile.id).map(a => ({...a, complex:D.complexes.find(c => c.id === a.complex_id)}));
+      const aps = D.apartments.filter(a => a.host_id === S.profile.id).map(a => ({...a, complex:D.complexes.find(c => c.id === a.complex_id), secret:D.secrets[a.id] || {}}));
       const ids = aps.map(a => a.id);
-      return {aps, tasks:D.tasks.filter(t => ids.includes(t.apartment_id) && t.task_date >= from && t.task_date <= to).map(t => D.join(t))};
+      return {aps, tasks:D.tasks.filter(t => ids.includes(t.apartment_id) && t.task_date >= from && t.task_date <= to && t.status !== 'cancelled').map(t => D.join(t))};
     }
-    const aps = await q(sb.from('apartments').select('*, complex:complexes(*)').eq('host_id', S.profile.id).order('name'));
-    const tasks = aps.length ? await q(sb.from('tasks').select(TASK_SEL).in('apartment_id', aps.map(a => a.id)).gte('task_date', from).lte('task_date', to).neq('status','cancelled').order('task_date', {ascending:false})) : [];
-    return {aps, tasks};
+    const aps = await q(sb.from('apartments').select('*, complex:complexes(*)').eq('host_id', S.profile.id).order('created_at'));
+    if (!aps.length) return {aps, tasks:[]};
+    const ids = aps.map(a => a.id);
+    const [secs, tasks] = await Promise.all([
+      q(sb.from('apartment_secrets').select('*').in('apartment_id', ids)),
+      q(sb.from('tasks').select(TASK_SEL).in('apartment_id', ids).gte('task_date', from).lte('task_date', to).neq('status','cancelled').order('task_date', {ascending:false}))
+    ]);
+    return {aps:aps.map(a => ({...a, secret:secs.find(s => s.apartment_id === a.id) || {}})), tasks};
   },
   async ins(table, row){
     if (DEMO) {
@@ -644,8 +697,9 @@ const api = {
 
 async function syncNow(aptId){
   if (DEMO) {
-    const ap = D.apartments.find(x => x.ical_url) || D.apartments[0]; const d1 = addDays(today(), 2), d2 = addDays(today(), 5); let n = 0;
-    [[d1,'demo-b1'],[d2,'demo-b2']].forEach(([d, u]) => { if (!D.tasks.some(t => t.booking_uid === u)) { D.tasks.push({id:uid(), apartment_id:ap.id, task_date:d, window_start:'11:00', window_end:'15:00', status:'pending', source:'ical', booking_uid:u, before_photos:[], photos:{}, published_at:nowIso(), referral_fee:0}); n++; } });
+    const ap = D.apartments.find(x => x.id === aptId) || D.apartments.find(x => x.ical_url) || D.apartments[0]; const d1 = addDays(today(), 2), d2 = addDays(today(), 5); let n = 0;
+    [[d1,'b1'],[d2,'b2']].forEach(([d, u]) => { u = ap.id + u; if (!D.tasks.some(t => t.booking_uid === u)) { const c = ap.cleaner_id && D.connections.some(x => x.host_id === ap.host_id && x.cleaner_id === ap.cleaner_id && x.status === 'accepted') ? ap.cleaner_id : null;
+      D.tasks.push({id:uid(), apartment_id:ap.id, host_id:ap.host_id, task_date:d, window_start:'11:00', window_end:'15:00', status:'pending', source:'ical', booking_uid:u, primary_cleaner:c, offer_status:c ? 'offered' : 'none', price:c ? +D.prof(c).prices?.[ap.size || '1'] || null : null, before_photos:[], photos:{}, published_at:nowIso(), referral_fee:0}); n++; } });
     ap.ical_synced_at = nowIso(); return {apartments:1, created:n, moved:0, cancelled:0, errors:[]};
   }
   const {data, error} = await sb.functions.invoke('ical-sync', {body: aptId ? {apartment_id: aptId} : {}});
@@ -748,60 +802,83 @@ const ring = (val, max, center, sub) => { const r = 62, c = 2 * Math.PI * r, k =
   return `<div class="ring"><svg viewBox="0 0 150 150" aria-hidden="true"><circle cx="75" cy="75" r="${r}" fill="none" stroke="#EEF0F2" stroke-width="16"/>${k ? `<circle cx="75" cy="75" r="${r}" fill="none" stroke="#B5E866" stroke-width="16" stroke-linecap="round" stroke-dasharray="${c * k} ${c}"/>` : ''}</svg><div class="c"><div><b class="num">${center}</b><span>${sub}</span></div></div></div>`; };
 
 /* ═════════════ landing ═════════════ */
-const authBlock = () => `<div class="auth">
-  <button class="btn" data-act="google">${ICON.google} הצטרפות עם Google</button>
+const SIZES = [['studio','סטודיו'], ['1','חדר שינה אחד'], ['2','2 חדרי שינה'], ['3','3+ חדרי שינה']];
+const sizeName = k => (SIZES.find(s => s[0] === k) || [, 'דירה'])[1];
+const stars = (r, n) => r ? `<span class="tag gold">★ ${(+r).toFixed(1)}${n ? ` · ${n}` : ''}</span>` : '<span class="tag">חדש/ה</span>';
+const priceLine = pr => SIZES.filter(([k]) => +pr?.[k] > 0).map(([k, l]) => `${l} ${money(pr[k])}`).join(' · ') || 'עוד לא קבע/ה מחירון';
+const validBasics = o => (o.full_name || '').trim().split(/\s+/).length < 2 ? 'נא למלא שם פרטי ושם משפחה'
+  : !/^0\d[\d-]{7,10}$/.test((o.phone || '').replace(/\s/g, '')) ? 'נא למלא מספר טלפון ישראלי תקין' : null;
+
+const authBlock = role => `<div class="auth">
+  <button class="btn" data-act="google" data-role="${role}">${ICON.google} ${role === 'host' ? 'פתיחת חשבון עם Google' : 'הצטרפות עם Google'}</button>
   <details><summary>אין Google? כניסה עם קישור למייל</summary>
-    <form data-submit="email"><input class="inp" type="email" name="email" required placeholder="name@example.com" autocomplete="email" dir="ltr"><button class="btn ghost" type="submit">שלחו לי קישור כניסה</button></form>
+    <form data-submit="email" data-role="${role}"><input class="inp" type="email" name="email" required placeholder="name@example.com" autocomplete="email" dir="ltr"><button class="btn ghost" type="submit">שלחו לי קישור כניסה</button></form>
   </details>
 </div>`;
 const V = {};
 V.landing = {
-  html: () => `<div class="lp">
+  html(){
+    const host = (S.lpAud ??= qs.get('for') === 'host' ? 'host' : 'cleaner') === 'host';
+    const role = host ? 'host' : 'cleaner';
+    const steps = host
+      ? [['נרשמים עם Google','החודש הראשון חינם, בלי כרטיס אשראי.'], ['מוסיפים דירה','מדביקים את קישור יומן ה-Airbnb, וכל צ׳ק-אאוט יוצר ניקיון לבד.'], ['בוחרים מנקה','מתוך רשימת המנקים באילת, לפי מחיר ודירוג.'], ['מאשרים ומשלמים','רואים 4 תמונות סיום, מאשרים ומשלמים למנקה ישירות.']]
+      : [['נרשמים עם Google','בלי סיסמאות, שנייה וזה בפנים.'], ['קובעים מחירון','מחיר לכל גודל דירה, ואיך מעבירים לך כסף.'], ['אימות זהות ועסק','צילום ת״ז ואישור עוסק. אחרי האישור מופיעים ברשימה.'], ['מקבלים עבודות','בעלי דירות פונים אליך, ואת/ה מאשר/ת מה שמתאים.']];
+    const perks = host
+      ? [[ICON.cal,'ניקיון לכל צ׳ק-אאוט','היומן של Airbnb או Booking מסתנכרן כל שעה. הזמנה חדשה יוצרת ניקיון, ביטול מבטל אותו.'],
+         [ICON.cam,'רואים הכול מהנייד','מתי המנקה הגיע/ה, תמונות מצב לפני הניקיון ו-4 תמונות סיום לפני שהאורחים נכנסים.'],
+         [ICON.coins,'הכסף לא עובר דרכנו','משלמים למנקה ישירות, בביט או בהעברה. לנו משלמים רק מנוי על התוכנה.']]
+      : [[ICON.coins,'את/ה קובע/ת את המחיר','המחירון שלך מוצג לבעלי הדירות, וכל עבודה מגיעה עם המחיר שקבעת.'],
+         [ICON.wallet,'בלי עמלה','בעל הדירה משלם לך ישירות. אנחנו לא לוקחים אחוזים מהעבודה.'],
+         [ICON.cam,'תיעוד שמגן עליך','צילום מצב בכניסה לדירה. אף אחד לא יאשים אותך במשהו שאורח שבר.']];
+    return `<div class="lp">
     <div class="lp-top"><span class="brand"><i aria-hidden="true"></i>CleanEilat</span><button class="btn sm ghost" style="background:#fff;box-shadow:none" data-act="demo">צפייה בהדגמה</button></div>
+    <div class="seg" role="group" aria-label="למי האתר" style="max-width:420px"><button aria-pressed="${!host}" data-act="lpAud" data-v="cleaner">אני מנקה</button><button aria-pressed="${host}" data-act="lpAud" data-v="host">יש לי דירות</button></div>
     <div class="lp-grid">
       <section class="card hero-card">
-        <span class="tag gold">מגייסים מנקים באילת</span>
-        <h1 style="margin-top:14px">עבודה גמישה בניקיון דירות נופש. תשלום על כל דירה.</h1>
-        <p class="lead">בוחרים משימות מהנייד, מצלמים לפני ואחרי, והכסף נכנס לארנק ברגע שהניקיון מאושר.${F('referral') ? ' מביאים חברים? מרוויחים על כל דירה שהם מנקים.' : ''}</p>
-        ${authBlock()}
+        <span class="tag gold">${host ? 'לבעלי דירות נופש באילת' : 'למנקים עצמאיים באילת'}</span>
+        <h1 style="margin-top:14px">${host ? 'הדירה מוכנה לאורחים, ואת/ה רואה את זה בטלפון.' : 'עבודה עצמאית בניקיון דירות נופש, במחיר שלך.'}</h1>
+        <p class="lead">${host ? 'מחברים את יומן ה-Airbnb, בוחרים מנקה ומקבלים תמונות של כל ניקיון. התשלום למנקה ישירות, בלי מתווך.' : 'בונים פרופיל עם מחירון, בעלי דירות מזמינים אותך, ואת/ה מאשר/ת רק מה שמתאים. התשלום ישירות אליך.'}</p>
+        ${authBlock(role)}
       </section>
       <div class="grid-cards">
-        <section class="card lime earn-demo" aria-label="דוגמה לארנק">
-          <div class="earn-row"><span class="vbadge"><i>✓</i>${F('deposit') ? 'מנקה מאומת/ת' : 'מנקה עצמאי/ת'}</span><span class="delta">+18% החודש</span></div>
-          <p class="muted" style="margin-top:16px">דוגמה: הצטבר החודש</p>
-          <div class="big num">₪6,240</div>
-          <div class="mini"><div><span>דירות שנוקו</span><b class="num">38</b></div><div><span>${F('referral') ? 'עמלות שותפים' : 'תשלום ממוצע לדירה'}</span><b class="num">${F('referral') ? '₪420' : '₪164'}</b></div></div>
+        ${host ? `<section class="card lime earn-demo" aria-label="דוגמה למסך בעל דירה">
+          <div class="earn-row"><span class="vbadge"><i>✓</i>מוכן לאורחים</span><span class="delta">היום</span></div>
+          <h3 style="font-size:20px;font-weight:700;margin-top:14px">הטרמינל, סוויטה 12</h3>
+          <div class="mini"><div><span>המנקה הגיע/ה</span><b class="num">11:04</b></div><div><span>סיום</span><b class="num">12:41</b></div></div>
         </section>
-        <section class="card">
-          <div class="card-h"><h3>${ICON.clock} יום עבודה טיפוסי</h3><span class="tag" dir="ltr">11:00–15:00</span></div>
+        <section class="card"><div class="card-h"><h3>${ICON.clock} מה רואים בזמן אמת</h3></div>
           <ul class="rows">
-            <li class="rowi"><span class="ic lime">${ICON.check}</span><span class="mid"><b>הטרמינל, סוויטה 12</b><span>אושר, 4 תמונות</span></span><span class="end amt pos num">+₪175</span></li>
-            <li class="rowi"><span class="ic orange">${ICON.broom}</span><span class="mid"><b>פנטהאוז צופית</b><span>בניקיון כעת</span></span><span class="end amt num">₪180</span></li>
-            ${F('referral') ? `<li class="rowi"><span class="ic">${ICON.users}</span><span class="mid"><b>עמלה מיוסי</b><span>חבר מביא חבר</span></span><span class="end amt pos num">+₪10</span></li>` : `<li class="rowi"><span class="ic">${ICON.cal}</span><span class="mid"><b>נוף הרים 7</b><span>מחר, משובץ לך</span></span><span class="end amt num">₪120</span></li>`}
-          </ul>
+            <li class="rowi"><span class="ic">${ICON.cal}</span><span class="mid"><b>צ׳ק-אאוט ביומן</b><span>נוצר ניקיון אוטומטית</span></span></li>
+            <li class="rowi"><span class="ic orange">${ICON.broom}</span><span class="mid"><b>המנקה בדירה</b><span>שעת הגעה ותמונות מצב</span></span></li>
+            <li class="rowi"><span class="ic lime">${ICON.check}</span><span class="mid"><b>4 תמונות סיום</b><span>מאשרים בלחיצה</span></span></li>
+          </ul></section>`
+        : `<section class="card lime earn-demo" aria-label="דוגמה להצעת עבודה">
+          <div class="earn-row"><span class="vbadge"><i>✓</i>הצעה חדשה</span><span class="delta">${sizeName('1')}</span></div>
+          <h3 style="font-size:20px;font-weight:700;margin-top:14px">הטרמינל, סוויטה 12</h3>
+          <div class="mini"><div><span>מחר</span><b class="num" dir="ltr">11:00–15:00</b></div><div><span>המחיר שלך</span><b class="num">₪150</b></div></div>
         </section>
+        <section class="card"><div class="card-h"><h3>${ICON.list} ככה נראית עבודה</h3></div>
+          <ul class="rows">
+            <li class="rowi"><span class="ic">${ICON.key}</span><span class="mid"><b>הגעתי לדירה</b><span>קוד הכניסה נפתח במקום</span></span></li>
+            <li class="rowi"><span class="ic orange">${ICON.cam}</span><span class="mid"><b>צילום לפני ואחרי</b><span>צ׳ק-ליסט ו-4 תמונות</span></span></li>
+            <li class="rowi"><span class="ic lime">${ICON.coins}</span><span class="mid"><b>בעל הדירה מאשר</b><span>ומשלם לך ישירות</span></span></li>
+          </ul></section>`}
       </div>
     </div>
-    <h2 class="lp-sec-title">איך מצטרפים</h2>
-    <ol class="steps">
-      <li><div><b>הצטרפות עם Google</b><span>בלי סיסמאות, שנייה וזה בפנים.</span></div></li>
-      <li><div><b>שאלון קצר</b><span>ניסיון, זמינות ואזור. פחות מדקה.</span></div></li>
-      <li><div><b>אימות זהות ועסק</b><span>צילום ת״ז ואישור עוסק זעיר או מורשה.</span></div></li>
-      <li><div><b>יוצאים לשטח</b><span>אחרי האישור, המשימות כבר מחכות בלוח.</span></div></li>
-    </ol>
-    <h2 class="lp-sec-title">${F('deposit') || F('referral') ? 'דרכים להרוויח יותר' : 'למה לעבוד איתנו'}</h2>
+    <h2 class="lp-sec-title">איך זה עובד</h2>
+    <ol class="steps">${steps.map(([b, s]) => `<li><div><b>${b}</b><span>${s}</span></div></li>`).join('')}</ol>
+    <h2 class="lp-sec-title">${host ? 'למה CleanEilat' : 'למה לעבוד דרכנו'}</h2>
     <div class="grid-cards" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">
-      ${F('deposit') ? `<section class="card"><div class="card-h"><h3>${ICON.star} מסלול מאומת</h3><span class="tag gold">₪1,500 פיקדון</span></div><p class="muted">ערבון שמוחזר בסיום. מאומתים מקבלים קדימות לדירות הרווחיות בטרמינל ותעריף מקסימלי.</p></section>` : `<section class="card"><div class="card-h"><h3>${ICON.cal} עבודה גמישה</h3></div><p class="muted">בוחרים בעצמכם אילו משימות לקחת מהלוח הפתוח. בלי משמרות ובלי מינימום.</p></section>`}
-      ${F('referral') ? `<section class="card"><div class="card-h"><h3>${ICON.users} חבר מביא חבר</h3><span class="tag gold">כל חודש</span></div><p class="muted">עמלה קבועה על כל דירה שחבר שהבאת מנקה. נפתח כשמנקים לפחות דירה אחת בחודש בעצמך.</p></section>` : `<section class="card"><div class="card-h"><h3>${ICON.wallet} תשלום מסודר</h3></div><p class="muted">כל ניקיון שאושר נכנס לארנק, והתשלום מועבר פעם בחודש עם פירוט מלא.</p></section>`}
-      <section class="card"><div class="card-h"><h3>${ICON.cam} תיעוד שמגן עליך</h3></div><p class="muted">צילום מצב בכניסה לדירה. אף אחד לא יאשים אותך במשהו שאורח שבר.</p></section>
+      ${perks.map(([ic, h, p]) => `<section class="card"><div class="card-h"><h3>${ic} ${h}</h3></div><p class="muted">${p}</p></section>`).join('')}
     </div>
     <section class="card lime" style="margin-top:12px;text-align:center;padding:30px 22px">
-      <h2 style="font-size:24px;letter-spacing:-.3px">מתחילים עכשיו באילת</h2>
-      <p class="muted" style="margin:6px 0 18px">המנקים הראשונים מקבלים את הדירות הראשונות.</p>
-      <div style="max-width:420px;margin:0 auto">${authBlock()}</div>
+      <h2 style="font-size:24px;letter-spacing:-.3px">${host ? 'החודש הראשון עלינו' : 'מתחילים עכשיו באילת'}</h2>
+      <p class="muted" style="margin:6px 0 18px">${host ? `אחרי זה ${money(S.cfg?.monthly_fee || 49)} לחודש לכל דירה. בלי התחייבות.` : 'המנקים הראשונים ברשימה הם הראשונים שבעלי הדירות רואים.'}</p>
+      <div style="max-width:420px;margin:0 auto">${authBlock(role)}</div>
     </section>
-    <footer class="lp-foot">CleanEilat, אילת · <a href="privacy.html">מדיניות פרטיות</a></footer>
-  </div>`
+    <footer class="lp-foot">CleanEilat היא פלטפורמה טכנולוגית שמחברת בין בעלי דירות נופש למנקים עצמאיים. ההתקשרות והתשלום הם ישירות ביניהם.<br><a href="terms.html">תנאי שימוש</a> · <a href="privacy.html">מדיניות פרטיות</a></footer>
+  </div>`;
+  }
 };
 
 /* ═════════════ onboarding ═════════════ */
@@ -812,7 +889,12 @@ const Q_CLEANER = [
   ['source','איך שמעת עלינו?',['חבר/ה','פייסבוק','אינסטגרם','אחר']]
 ];
 V.onboarding = {
-  load(){ const p = S.profile; S.ob.full_name ??= p.full_name || ''; S.ob.phone ??= p.phone || ''; S.ob.role = 'cleaner'; },
+  load(){
+    const p = S.profile, o = S.ob;
+    o.full_name ??= p.full_name || ''; o.phone ??= p.phone || '';
+    o.role ??= ['host','cleaner'].includes(p.desired_role) ? p.desired_role : (localStorage.getItem('ce_role') || null);
+    o.prices ??= {...(p.prices || {})}; o.payment_info ??= p.payment_info || ''; o.bio ??= p.bio || '';
+  },
   html(){
     const p = S.profile, o = S.ob;
     if (p.status === 'submitted') return topbar() + `<main class="shell">
@@ -821,21 +903,41 @@ V.onboarding = {
         <h1 style="font-size:24px">הבקשה בבדיקה</h1>
         <p class="muted" style="margin-top:6px">קיבלנו את הפרטים והמסמכים. בדרך כלל מאשרים תוך יום עסקים.</p></section>
       <section class="card"><div class="card-h"><h3>מה קורה עכשיו</h3></div><ul class="perks" style="margin:0">
-        <li>בודקים את תעודת הזהות ואישור העוסק.</li><li>פותחים לך ארנק אישי לתשלומים.</li><li>אחרי האישור, הכניסה הבאה נפתחת ישר למשימות.</li></ul></section>
-      ${F('deposit') ? `<section class="card"><div class="card-h"><h3>${ICON.star} כדאי לדעת</h3></div><p class="muted">מנקים שמפקידים ערבון ועומדים בנהלים מקבלים קדימות בטרמינל ותעריף מקסימלי. אפשר להצטרף אחרי האישור.</p></section>` : ''}
+        <li>בודקים את תעודת הזהות ואישור העוסק.</li><li>אחרי האישור, הפרופיל והמחירון שלך מופיעים לבעלי הדירות.</li><li>הכניסה הבאה נפתחת ישר למסך העבודות.</li></ul></section>
       <button class="btn ghost" style="margin-top:12px;background:#fff;box-shadow:none" data-act="recheck">בדיקה אם אושרתי</button></main>`;
-    const steps = ['קצת עליך','אימות זהות ועסק'];
+    if (!o.role) return topbar() + `<main class="shell">
+      <div class="hello"><h1>איך תשתמש/י ב-CleanEilat?</h1><p>אפשר לשנות אחר כך דרך התמיכה.</p></div>
+      <button class="card" style="width:100%;text-align:right;border:0;margin-bottom:12px" data-act="obRole" data-v="host"><div class="card-h"><h3>${ICON.pool} יש לי דירות נופש</h3></div><p class="muted">מחברים יומן Airbnb, בוחרים מנקה ומאשרים כל ניקיון לפי תמונות.</p></button>
+      <button class="card" style="width:100%;text-align:right;border:0" data-act="obRole" data-v="cleaner"><div class="card-h"><h3>${ICON.broom} אני מנקה עצמאי/ת</h3></div><p class="muted">קובעים מחירון, מקבלים עבודות מבעלי דירות ומקבלים תשלום ישירות.</p></button></main>`;
+    const basics = `<label class="f"><span>שם מלא</span><input class="inp" data-bind="ob.full_name" value="${esc(o.full_name)}" autocomplete="name" required></label>
+      <label class="f"><span>טלפון נייד</span><input class="inp" data-bind="ob.phone" value="${esc(o.phone)}" type="tel" inputmode="tel" autocomplete="tel" dir="ltr" placeholder="050-0000000" required></label>`;
+    const agree = txt => `<div class="checks"><label><input type="checkbox" data-bind="ob.agree" ${o.agree ? 'checked' : ''}><span>${txt} <a href="terms.html" target="_blank" rel="noopener">תנאי השימוש</a>.</span></label></div>`;
+    const back = `<button class="btn ghost sm" data-act="obBack">חזרה</button>`;
+    if (o.role === 'host') return topbar() + `<main class="shell">
+      <div class="hello"><p style="font-weight:600;color:var(--lime-ink)">חשבון בעל דירה</p><h1>כמה פרטים וסיימנו</h1></div>
+      <section class="card">${basics}
+        <div style="margin-bottom:16px"><span class="flabel">כמה דירות יש לך באילת?</span><div class="choices">
+          ${['1','2–3','4–10','מעל 10'].map(v => `<button class="choice" aria-pressed="${o.answers.apartments === v}" data-act="obPick" data-k="apartments" data-v="${esc(v)}">${esc(v)}</button>`).join('')}</div></div>
+        ${agree('קראתי ואני מסכים/ה ל')}
+        <div class="row" style="flex-wrap:nowrap">${p.desired_role ? '' : `<button class="btn ghost sm" data-act="obRole" data-v="">שינוי</button>`}<button class="btn lagoon" style="flex:1" data-act="obSubmit" ${o.sending ? 'disabled' : ''}>${o.sending ? 'פותח חשבון…' : 'פתיחת חשבון, חודש ראשון חינם'}</button></div>
+      </section></main>`;
+    const steps = ['קצת עליך','המחירון שלך','אימות זהות ועסק'];
     let body = '';
     if (o.step === 0) body = `<section class="card">
       ${p.status === 'rejected' ? `<div class="alert red" style="margin-top:0"><b>הבקשה הקודמת לא אושרה.</b> ${esc(p.rejection_reason || '')} אפשר לעדכן ולשלוח שוב.</div>` : ''}
-      <label class="f"><span>שם מלא</span><input class="inp" data-bind="ob.full_name" value="${esc(o.full_name)}" autocomplete="name" required></label>
-      <label class="f"><span>טלפון נייד</span><input class="inp" data-bind="ob.phone" value="${esc(o.phone)}" type="tel" inputmode="tel" autocomplete="tel" dir="ltr" placeholder="050-0000000" required></label>
+      ${basics}
       <label class="f"><span>שכונת מגורים באילת</span><input class="inp" data-bind="ob.answers.area" value="${esc(o.answers.area || '')}" placeholder="למשל: שחמון"></label>
       ${Q_CLEANER.map(([k, label, opts, multi]) => `<div style="margin-bottom:16px"><span class="flabel">${label}</span><div class="choices">
         ${opts.map(v => { const on = multi ? (o.answers[k] || []).includes(v) : o.answers[k] === v; return `<button class="choice" aria-pressed="${on}" data-act="obPick" data-k="${k}" data-v="${esc(v)}" data-multi="${multi ? 1 : ''}">${esc(v)}</button>`; }).join('')}
       </div></div>`).join('')}
-      <button class="btn lagoon" style="margin-top:6px" data-act="obNext">המשך</button></section>`;
+      <div class="row" style="flex-wrap:nowrap">${p.desired_role ? '' : `<button class="btn ghost sm" data-act="obRole" data-v="">שינוי</button>`}<button class="btn lagoon" style="flex:1" data-act="obNext">המשך</button></div></section>`;
     if (o.step === 1) body = `<section class="card">
+      <p class="muted" style="margin-bottom:14px">המחיר לניקיון אחד בין אורחים. בעלי הדירות רואים את המחירון לפני שהם פונים אליך. אפשר לשנות בכל רגע.</p>
+      <div class="grid2">${SIZES.map(([k, l]) => `<label class="f"><span>${l} (₪)</span><input class="inp" type="number" min="0" inputmode="numeric" data-bind="ob.prices.${k}" value="${esc(o.prices[k] ?? '')}" placeholder="—"></label>`).join('')}</div>
+      <label class="f"><span>איך מעבירים לך תשלום</span><input class="inp" data-bind="ob.payment_info" value="${esc(o.payment_info)}" placeholder="למשל: ביט 050-0000000 או פרטי חשבון"><small class="muted" style="display:block;margin-top:4px">מוצג רק לבעלי דירות שאישרת לעבוד איתם.</small></label>
+      <label class="f"><span>כמה מילים עליך (לא חובה)</span><textarea class="inp" data-bind="ob.bio" placeholder="ניסיון, אזורים, מה חשוב לך בעבודה">${esc(o.bio)}</textarea></label>
+      <div class="row" style="flex-wrap:nowrap">${back}<button class="btn lagoon" style="flex:1" data-act="obNext">המשך</button></div></section>`;
+    if (o.step === 2) body = `<section class="card">
       <p class="muted" style="margin-bottom:14px">המסמכים נשמרים מוצפנים ורק צוות האימות רואה אותם.</p>
       <div style="margin-bottom:16px"><span class="flabel">סוג העסק</span><div class="choices">
         ${Object.entries(BIZ).map(([k, v]) => `<button class="choice" aria-pressed="${o.business_type === k}" data-act="obBiz" data-v="${k}">${v}</button>`).join('')}</div></div>
@@ -846,81 +948,95 @@ V.onboarding = {
           ${pv ? `<div class="ph">${pv === 'pdf' ? '<div class="empty" style="padding:30px 6px">PDF נבחר</div>' : `<img src="${pv}" alt="${lbl}">`}<button class="x" data-act="obClear" data-k="${k}" aria-label="הסרה">×</button></div>`
                : `<label class="ph-add req">${ICON.cam}<span>צלמו או העלו</span><input type="file" accept="image/*${k === 'biz' ? ',application/pdf' : ''}" ${k === 'id' ? 'capture="environment"' : ''} data-change="obFile" data-k="${k}"></label>`}</div>`; }).join('')}
       </div>
-      <div class="checks"><label><input type="checkbox" data-bind="ob.agree" ${o.agree ? 'checked' : ''}><span>אני מתחייב/ת לנהלים: עמידה בזמנים, צילום נזקים לפני תחילת העבודה וצילום התוצאה בסיום.</span></label></div>
-      <div class="row" style="flex-wrap:nowrap"><button class="btn ghost sm" data-act="obBack">חזרה</button><button class="btn lagoon" style="flex:1" data-act="obSubmit" ${o.sending ? 'disabled' : ''}>${o.sending ? 'שולח…' : 'שליחה לאימות'}</button></div></section>`;
+      ${agree('אני עובד/ת כעצמאי/ת, אחראי/ת לעבודה ולדיווח על ההכנסות שלי, ומסכים/ה ל')}
+      <div class="row" style="flex-wrap:nowrap">${back}<button class="btn lagoon" style="flex:1" data-act="obSubmit" ${o.sending ? 'disabled' : ''}>${o.sending ? 'שולח…' : 'שליחה לאימות'}</button></div></section>`;
     return topbar() + `<main class="shell">
-      <div class="hello"><p style="font-weight:600;color:var(--lime-ink)">שלב ${o.step + 1} מתוך 2</p><h1>${steps[o.step]}</h1></div>
-      <div class="progress" aria-hidden="true" style="background:#fff"><i style="width:${(o.step + 1) * 50}%"></i></div>
+      <div class="hello"><p style="font-weight:600;color:var(--lime-ink)">שלב ${o.step + 1} מתוך 3</p><h1>${steps[o.step]}</h1></div>
+      <div class="progress" aria-hidden="true" style="background:#fff"><i style="width:${(o.step + 1) / 3 * 100}%"></i></div>
       ${body}</main>`;
   }
 };
 
 /* ═════════════ cleaner ═════════════ */
+const isOffer = t => t.offer_status === 'offered' && t.primary_cleaner === S.profile?.id;
 V.cleaner = {
   async load(){
     S.tab.c ??= 'today';
-    const [tasks, wallet, refs, pool, entries, settings, me, payouts] = await Promise.all([
-      api.cleanerTasks(), api.rpc('my_wallet'), api.rpc('my_referrals'), api.rpc('open_pool'), api.walletEntries(), api.settings(), api.me(), api.myPayouts()
+    const [tasks, pool, earn, contacts, history, settings, me] = await Promise.all([
+      api.cleanerTasks(), api.rpc('open_pool'), api.rpc('cleaner_earnings'), api.rpc('my_contacts'), api.cleanerHistory(), api.settings(), api.me()
     ]);
     S.profile = me;
-    Object.assign(S.data, {tasks, wallet, refs, pool, entries, settings, payouts}); S.cfg = settings;
+    Object.assign(S.data, {tasks, pool, earn, contacts:contacts || [], history, settings}); S.cfg = settings;
   },
   html(){
     const d = S.data, t = S.taskId && d.tasks.find(x => x.id === S.taskId);
-    let main;
-    if (t) main = this.detail(t);
-    else main = ({today:this.today, pool:this.pool, wallet:this.wallet, track:this.track})[S.tab.c].call(this);
-    return topbar() + `<main class="shell">${main}</main>` + tabs([['today','בית','list'], ['pool','לוח פתוח','pool', d.pool.length || ''], ['wallet','ארנק','wallet'], F('deposit') ? ['track','מאומת','star'] : ['track','פרופיל','user']], 'c');
+    const main = t ? this.detail(t) : ({today:this.today, pool:this.pool, earn:this.earn, profile:this.profile})[S.tab.c].call(this);
+    const inbox = d.tasks.filter(isOffer).length + d.contacts.filter(c => c.side === 'host' && c.status === 'pending').length;
+    return topbar() + `<main class="shell">${main}</main>` + tabs([['today','בית','list', inbox || ''], ['pool','עבודות פתוחות','pool', d.pool.length || ''], ['earn','הכנסות','wallet'], ['profile','פרופיל','user']], 'c');
   },
   today(){
-    const p = S.profile, d = S.data, td = today(), w = d.wallet;
-    const todays = d.tasks.filter(t => t.task_date <= td);
-    const open = todays.filter(t => t.status !== 'approved');
-    const doneN = todays.length - open.length;
-    const later = d.tasks.filter(t => t.task_date > td);
-    const total = +w.total;
-    const icon = s => ['approved'].includes(s) ? `<span class="ic lime">${ICON.check}</span>` : ['arrived','in_progress','submitted','needs_fix'].includes(s) ? `<span class="ic orange">${ICON.broom}</span>` : `<span class="ic">${ICON.key}</span>`;
-    const row = t => { const a = t.apartment || {}; const backup = t.backup_cleaner === p.id;
+    const p = S.profile, d = S.data, td = today(), e = d.earn || {};
+    const mine = d.tasks.filter(t => !isOffer(t));
+    const offers = d.tasks.filter(isOffer);
+    const reqs = d.contacts.filter(c => c.side === 'host' && c.status === 'pending');
+    const todays = mine.filter(t => t.task_date <= td), open = todays.filter(t => t.status !== 'approved'), doneN = todays.length - open.length;
+    const later = mine.filter(t => t.task_date > td);
+    const noPrices = !SIZES.some(([k]) => +p.prices?.[k] > 0);
+    const icon = s => s === 'approved' ? `<span class="ic lime">${ICON.check}</span>` : ['arrived','in_progress','submitted','needs_fix'].includes(s) ? `<span class="ic orange">${ICON.broom}</span>` : `<span class="ic">${ICON.key}</span>`;
+    const row = t => { const a = t.apartment || {};
       return `<li><button class="rowi" data-act="openTask" data-id="${t.id}">${icon(t.status)}
-        <span class="mid"><b>${esc(a.name)}</b><span>${win(t)}${backup ? ', כוננות גיבוי' : ''}${t.is_urgent ? ', דחוף' : ''}${t.task_date < td ? ', מאתמול' : ''}</span></span>
-        <span class="end" style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><b class="num" style="font-size:16px">${money(payOf(t))}</b>${chip(t.status)}</span></button></li>`; };
+        <span class="mid"><b>${esc(a.name)}</b><span>${win(t)}${t.backup_cleaner === p.id ? ', כוננות גיבוי' : ''}${t.task_date < td ? ', מאתמול' : ''}</span></span>
+        <span class="end" style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">${payOf(t) ? `<b class="num" style="font-size:16px">${money(payOf(t))}</b>` : ''}${chip(t.status)}</span></button></li>`; };
     return `
+      ${noPrices ? `<div class="alert orange" style="margin-top:0">עוד לא קבעת מחירון, ולכן אי אפשר לקחת עבודות פתוחות. <button class="linkbtn" data-act="tab" data-key="c" data-id="profile">קביעת מחירון</button></div>` : ''}
       <section class="card">
-        <div class="row between"><span class="lbl-s">הצטבר החודש</span><span class="tag">${monthName(td.slice(0,7))}</span></div>
-        <div class="big num" style="margin:6px 0 16px">${money(total)}</div>
+        <div class="row between"><span class="lbl-s">הכנסות החודש</span><span class="tag">${monthName(td.slice(0,7))}</span></div>
+        <div class="big num" style="margin:6px 0 16px">${money(e.total)}</div>
         <div class="row" style="flex-wrap:nowrap">
-          <button class="btn sm" data-act="tab" data-key="c" data-id="wallet">לארנק</button>
-          ${F('referral') ? `<button class="btn sm ghost" data-act="share" data-link="${esc(location.origin + location.pathname + '?ref=' + p.referral_code)}">${ICON.share.replace('<svg','<svg width="18" height="18"')} הזמנת חבר</button>` : ''}
-          <span style="flex:1"></span>
-          <button class="circle" data-act="tab" data-key="c" data-id="pool" aria-label="ללוח הפתוח">${ICON.arrow}</button>
+          <button class="btn sm" data-act="tab" data-key="c" data-id="earn">לפירוט</button><span style="flex:1"></span>
+          <button class="circle" data-act="tab" data-key="c" data-id="pool" aria-label="לעבודות הפתוחות">${ICON.arrow}</button>
         </div>
       </section>
       <div class="grid-cards two" style="margin-top:12px">
-        ${F('referral') ? `<section class="card lime" style="padding:16px">
-          <span class="lbl-s" style="color:rgba(31,59,23,.7)">עמלות שותפים</span>
-          <div class="num" style="font-size:26px;font-weight:600;margin-top:4px">${money(w.referral_payable)}</div>
-          <span class="delta" style="margin-top:8px">${!w.unlocked ? 'נעול החודש' : +w.referral_forfeited > 0 ? 'הגעת לתקרה' : 'פתוח החודש'}</span>
-        </section>` : `<section class="card lime" style="padding:16px">
-          <span class="lbl-s" style="color:rgba(31,59,23,.7)">ניקיונות החודש</span>
-          <div class="num" style="font-size:26px;font-weight:600;margin-top:4px">${w.own_cleanings}</div>
-          <span class="delta" style="margin-top:8px">אושרו בבקרה</span>
-        </section>`}
-        <section class="card" style="padding:16px">
-          <span class="lbl-s">ממתין לאישור</span>
-          <div class="num" style="font-size:26px;font-weight:600;margin-top:4px">${money(w.pending_review)}</div>
-          ${F('deposit') ? `<span class="tag" style="margin-top:8px">${p.is_verified ? 'תעריף מקסימלי' : 'תעריף רגיל'}</span>` : '<span class="tag" style="margin-top:8px">אחרי בקרה</span>'}
-        </section>
+        <section class="card lime" style="padding:16px"><span class="lbl-s" style="color:rgba(31,59,23,.7)">ניקיונות שאושרו</span>
+          <div class="num" style="font-size:26px;font-weight:600;margin-top:4px">${+e.count || 0}</div><span class="delta" style="margin-top:8px">החודש</span></section>
+        <section class="card" style="padding:16px"><span class="lbl-s">עוד לא שולם לך</span>
+          <div class="num" style="font-size:26px;font-weight:600;margin-top:4px">${money(e.unpaid)}</div><span class="tag" style="margin-top:8px">ישירות מבעלי הדירות</span></section>
       </div>
+      ${reqs.length ? `<section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.users} בעלי דירות שרוצים לעבוד איתך</h3><span class="tag gold">${reqs.length}</span></div>
+        <ul class="rows">${reqs.map(c => `<li class="rowi"><span class="av" style="width:40px;height:40px">${initials(c.full_name)}</span><span class="mid"><b>${esc(c.full_name)}</b><span>אחרי אישור יראה/תראה את הטלפון ופרטי התשלום שלך</span></span>
+          <span class="end row" style="flex-wrap:nowrap;gap:6px"><button class="btn xs green" data-act="connResp" data-id="${c.id}" data-ok="1">אישור</button><button class="btn xs ghost" data-act="connResp" data-id="${c.id}">לא עכשיו</button></span></li>`).join('')}</ul></section>` : ''}
+      ${offers.map(t => this.offerCard(t)).join('')}
       <section class="card" style="margin-top:12px">
         <div class="card-h"><h3>${ICON.list} היום, ${fmtShort(td)}</h3><span class="tag">${doneN}/${todays.length} הושלמו</span></div>
         ${todays.length ? `<ul class="rows">${open.concat(todays.filter(t => t.status === 'approved')).map(row).join('')}</ul>`
-          : `<div class="empty" style="padding:16px 6px"><p>אין משימות משובצות להיום.</p><button class="btn lagoon sm" data-act="tab" data-key="c" data-id="pool">ללוח הפתוח</button></div>`}
+          : `<div class="empty" style="padding:16px 6px"><p>אין ניקיונות היום.</p><button class="btn lagoon sm" data-act="tab" data-key="c" data-id="pool">לעבודות הפתוחות</button></div>`}
       </section>
       ${todays.length ? `<section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.clock} התקדמות היום</h3></div>${ring(doneN, todays.length, `${doneN}/${todays.length}`, 'דירות מוכנות')}</section>` : ''}
-      ${later.length ? `<section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.cal} הימים הקרובים</h3></div><ul class="rows">${later.map(t => `<li class="rowi"><span class="ic">${ICON.cal}</span><span class="mid"><b>${esc(t.apartment?.name)}</b><span>${fmtShort(t.task_date)}, ${win(t)}</span></span><span class="end">${t.backup_cleaner === p.id ? '<span class="tag gold">גיבוי</span>' : chip(t.status)}</span></li>`).join('')}</ul></section>` : ''}`;
+      ${later.length ? `<section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.cal} הימים הקרובים</h3></div><ul class="rows">${later.map(t => `<li><button class="rowi" data-act="openTask" data-id="${t.id}"><span class="ic">${ICON.cal}</span><span class="mid"><b>${esc(t.apartment?.name)}</b><span>${fmtShort(t.task_date)}, ${win(t)}</span></span><span class="end">${payOf(t) ? `<b class="num">${money(payOf(t))}</b>` : ''}</span></button></li>`).join('')}</ul></section>` : ''}`;
+  },
+  offerCard(t){
+    const a = t.apartment || {};
+    return `<section class="card lime" style="margin-top:12px">
+      <div class="row between"><span class="vbadge"><i>✓</i>הצעת עבודה</span><b class="num" style="font-size:22px">${money(payOf(t))}</b></div>
+      <h3 style="font-size:19px;font-weight:700;margin:10px 0 2px">${esc(a.name)}</h3>
+      <p class="muted">${esc(a.address || '')}</p>
+      <p style="margin:6px 0 14px;font-weight:600">${t.task_date === today() ? 'היום' : fmtShort(t.task_date)}, ${win(t)}</p>
+      ${t.request_note ? `<p class="small" style="margin:-6px 0 12px">הערה: ${esc(t.request_note)}</p>` : ''}
+      <div class="row" style="flex-wrap:nowrap"><button class="btn" style="flex:1" data-act="offer" data-id="${t.id}" data-ok="1">מאשר/ת</button><button class="btn ghost sm" style="background:#fff" data-act="offer" data-id="${t.id}">לא יכול/ה</button></div>
+    </section>`;
   },
   detail(t){
     const a = t.apartment || {}, st = t.status, dr = draft(t), code = S.codes[t.id];
+    const host = S.data.contacts.find(c => c.side === 'host' && c.id === (t.host_id || a.host_id) && c.phone);
+    const head = `<button class="back" data-act="closeTask">› כל המשימות</button>
+    <div class="td-head">${isOffer(t) ? '<span class="chip orange">ממתין לאישור שלך</span>' : chip(st)}
+      <h2>${esc(a.name)}</h2><p class="muted">${esc(a.complex?.name || '')}${a.complex?.name && a.address ? ', ' : ''}${esc(a.address || '')}</p>
+      <div class="row between" style="margin-top:10px"><span class="win">${fmtShort(t.task_date)}, ${win(t)}${payOf(t) ? ` · <span class="num">${money(payOf(t))}</span>` : ''}</span>
+      <span class="row" style="gap:6px">${host ? `<a class="btn sm ghost" href="tel:${esc(host.phone)}">התקשרות</a>` : ''}${a.address ? `<a class="btn sm ghost" href="https://waze.com/ul?q=${encodeURIComponent(a.address + ', אילת')}&navigate=yes" target="_blank" rel="noopener">Waze</a>` : ''}</span></div>
+      ${a.notes ? `<p class="small" style="margin-top:8px"><b>הערות מבעל הדירה:</b> ${esc(a.notes)}</p>` : ''}
+    </div>`;
+    if (isOffer(t)) return head + this.offerCard(t);
     const stage = ['pending','requested'].includes(st) ? 1 : st === 'arrived' ? 2 : ['in_progress','needs_fix'].includes(st) ? 3 : 4;
     const busy = k => S.up[t.id + k];
     const addTile = (slot, label, req) => busy(slot) ? `<div class="ph-add"><div class="spin"></div><span>מעלה…</span></div>` :
@@ -928,29 +1044,24 @@ V.cleaner = {
     const checked = CHECK.filter(([k]) => dr.checks[k]).length;
     const photosOk = SLOTS.every(([k]) => dr.photos[k]);
     const canFinish = photosOk && checked === CHECK.length;
-    return `<button class="back" data-act="closeTask">› כל המשימות</button>
-    <div class="td-head">${chip(st)}
-      <h2>${esc(a.name)}</h2><p class="muted">${esc(a.complex?.name || '')}${a.address ? ', ' + esc(a.address) : ''}</p>
-      <div class="row between" style="margin-top:10px"><span class="win">${fmtShort(t.task_date)}, ${win(t)} · <span class="num">${money(payOf(t))}</span></span>
-      ${a.address ? `<a class="btn sm ghost" href="https://waze.com/ul?q=${encodeURIComponent(a.address + ', אילת')}&navigate=yes" target="_blank" rel="noopener">ניווט ב-Waze</a>` : ''}</div>
-    </div>
-    ${st === 'needs_fix' ? `<div class="alert orange"><b>הצוות ביקש תיקון:</b> ${esc(t.admin_note || '')}<br>תקנו, החליפו את התמונות הרלוונטיות ושלחו שוב.</div>` : ''}
-    ${t.backup_cleaner === S.profile.id && stage < 3 ? `<div class="alert info">את/ה בכוננות גיבוי לדירה הזו. היכנס/י רק אם הצוות הקפיץ אותך.</div>` : ''}
+    return head + `
+    ${st === 'needs_fix' ? `<div class="alert orange"><b>בעל הדירה ביקש תיקון:</b> ${esc(t.admin_note || '')}<br>תקנו, החליפו את התמונות הרלוונטיות ושלחו שוב.</div>` : ''}
+    ${t.backup_cleaner === S.profile.id && stage < 3 ? `<div class="alert info">את/ה בכוננות גיבוי לדירה הזו. היכנס/י רק אם ביקשו ממך.</div>` : ''}
     <ol class="flow">
       <li class="${stage > 1 ? 'done' : 'cur'}"><h3>הגעה לדירה</h3>
         ${code && stage < 4 ? `<div class="codebox"><span>קוד כניסה</span><b>${esc(code.code || '—')}</b>${code.notes ? `<p>${esc(code.notes)}</p>` : ''}</div>`
           : stage < 4 ? `<button class="btn ${stage === 1 ? 'lagoon' : 'ghost'}" data-act="reveal" data-id="${t.id}">${ICON.key.replace('<svg','<svg width="22" height="22"')} ${stage === 1 ? 'הגעתי לדירה' : 'הצגת קוד הכניסה שוב'}</button>
-             <p class="hint">קוד הכניסה והכספת נחשפים רק כשמגיעים. שעת ההגעה נשמרת.</p>` : ''}
+             <p class="hint">קוד הכניסה נחשף רק ביום הניקיון, כשמגיעים. שעת ההגעה נשמרת.</p>` : ''}
         ${t.arrived_at ? `<p class="muted small" style="margin-top:8px">הגעה נרשמה ב-${fmtTime(t.arrived_at)}</p>` : ''}
       </li>
       <li class="${stage > 2 ? 'done' : stage === 2 ? 'cur' : ''}"><h3>צילום מצב הדירה לפני הניקיון</h3>
-        ${stage === 2 ? `<p class="muted small" style="margin-bottom:10px">צלמו את הדירה כפי שמצאתם אותה, וכל נזק או בעיה. זה מגן עליך ועלינו מול בעל הדירה.</p>
+        ${stage === 2 ? `<p class="muted small" style="margin-bottom:10px">צלמו את הדירה כפי שמצאתם אותה, וכל נזק או בעיה. זה מגן עליך מול בעל הדירה.</p>
           <div class="ph-grid">${dr.before.map((p, i) => `<div class="ph"><img data-p="${esc(p)}" alt="תמונת מצב ${i + 1}" data-act="zoom"><button class="x" data-act="rmBefore" data-id="${t.id}" data-i="${i}" aria-label="הסרת תמונה">×</button></div>`).join('')}
             ${dr.before.length < 8 ? addTile('before', dr.before.length ? 'עוד תמונה' : 'צילום מצב', !dr.before.length) : ''}</div>
           <label class="f" style="margin-top:12px"><span>נזקים או בעיות שמצאתי (לא חובה)</span><textarea class="inp" data-bind="draft.${t.id}.notes" placeholder="למשל: כוס שבורה במטבח, כתם על הספה">${esc(dr.notes)}</textarea></label>
           <button class="btn lagoon" data-act="start" data-id="${t.id}" ${dr.before.length ? '' : 'disabled'}>התחל ניקיון</button>
           <p class="hint">${dr.before.length ? 'בלחיצה נשמרים השעה ומיקום ה-GPS.' : 'צריך לפחות תמונה אחת כדי להתחיל.'}</p>`
-        : stage > 2 ? `<div class="strip">${(t.before_photos || []).map((p, i) => img(p, '', '')).join('')}</div>
+        : stage > 2 ? `<div class="strip">${(t.before_photos || []).map(p => img(p, '', '')).join('')}</div>
           ${t.damage_notes ? `<p class="small" style="margin-top:8px"><b>נזקים שתועדו:</b> ${esc(t.damage_notes)}</p>` : ''}
           <p class="muted small" style="margin-top:6px">התחלה ב-${fmtTime(t.started_at)}${t.start_lat ? ', מיקום GPS נשמר' : ''}</p>` : ''}
       </li>
@@ -961,131 +1072,224 @@ V.cleaner = {
           <div class="ph-grid four">${SLOTS.map(([k, l]) => dr.photos[k] && !busy(k)
             ? `<div class="ph"><img data-p="${esc(dr.photos[k])}" alt="${l}" data-act="zoom"><span class="lbl">${l}</span><button class="x" data-act="rmPhoto" data-id="${t.id}" data-k="${k}" aria-label="צילום מחדש">↻</button></div>`
             : addTile(k, l, true)).join('')}</div>
-          <div class="sticky-cta"><button class="btn green" data-act="finish" data-id="${t.id}" ${canFinish ? '' : 'disabled'}>סיום משימה</button>
-          <p class="hint">${canFinish ? 'הכול מוכן לשליחה לבקרת איכות.' : `חסרים: ${[!photosOk && `${SLOTS.filter(([k]) => !dr.photos[k]).length} תמונות`, checked < CHECK.length && `${CHECK.length - checked} סעיפים בצ׳ק-ליסט`].filter(Boolean).join(' ו-')}`}</p></div>`
+          <div class="sticky-cta"><button class="btn green" data-act="finish" data-id="${t.id}" ${canFinish ? '' : 'disabled'}>סיום ושליחה לבעל הדירה</button>
+          <p class="hint">${canFinish ? 'בעל הדירה יקבל את התמונות לאישור.' : `חסרים: ${[!photosOk && `${SLOTS.filter(([k]) => !dr.photos[k]).length} תמונות`, checked < CHECK.length && `${CHECK.length - checked} סעיפים בצ׳ק-ליסט`].filter(Boolean).join(' ו-')}`}</p></div>`
         : stage === 4 ? `<div class="ph-grid four">${SLOTS.map(([k, l]) => img(t.photos?.[k], l)).join('')}</div>
-          <div class="alert ${st === 'approved' ? 'green' : 'info'}">${st === 'approved' ? `הניקיון אושר. ${money(t.cleaner_pay)} נכנסו לארנק שלך.` : 'נשלח לבקרת איכות. התשלום ייכנס לארנק מיד אחרי האישור.'}</div>` : ''}
+          <div class="alert ${st === 'approved' ? 'green' : 'info'}">${st === 'approved'
+            ? `בעל הדירה אישר את הניקיון${t.rating ? ` ודירג ${'★'.repeat(t.rating)}` : ''}. ${t.paid_at ? 'הוא סימן שהתשלום הועבר.' : `התשלום (${money(payOf(t))}) מגיע ממנו ישירות.`}`
+            : 'נשלח לבעל הדירה. הוא יאשר אחרי שיראה את התמונות.'}</div>` : ''}
       </li>
     </ol>`;
   },
   pool(){
-    const p = S.profile, d = S.data;
-    return `<div class="hello"><h1>לוח משימות פתוח</h1><p>דירות שעדיין מחכות למנקה. מי שתופס ראשון, מקבל.</p></div>
-      ${!F('deposit') ? '' : p.is_verified ? `<div class="alert green">${ICON.star.replace('<svg','<svg width="16" height="16" style="vertical-align:-3px"')} כמנקה מאומת/ת את/ה רואה משימות חדשות ודירות פרימיום לפני כולם.</div>`
-        : `<div class="alert info">משימות חדשות ודירות פרימיום בטרמינל מוצגות קודם למנקים מאומתים. <button class="linkbtn" data-act="tab" data-key="c" data-id="track">איך מצטרפים</button></div>`}
+    const d = S.data;
+    return `<div class="hello"><h1>עבודות פתוחות</h1><p>ניקיונות שבעלי דירות פרסמו ועוד אין להם מנקה. המחיר לפי המחירון שלך, ומי שלוקח ראשון מקבל.</p></div>
       ${d.pool.length ? d.pool.map(x => `<div class="card">
-        <div class="row between"><div class="row">${x.is_urgent ? '<span class="tag red">דחוף</span>' : ''}${x.is_premium ? '<span class="tag gold">פרימיום</span>' : ''}</div><b style="font-size:20px">${money(x.pay)}</b></div>
-        <h3 style="font-size:19px;font-weight:800;margin:8px 0 2px">${esc(x.apartment)}</h3>
-        <p class="muted">${esc(x.complex || '')}${x.address ? ', ' + esc(x.address) : ''}</p>
-        <p style="margin:6px 0 12px;font-weight:700">${fmtShort(x.task_date)}, ${win(x)}</p>
-        <button class="btn lagoon" data-act="claim" data-id="${x.id}">אני לוקח/ת את זה</button></div>`).join('')
-        : `<div class="card empty"><h3>הלוח ריק כרגע</h3><p>כל הדירות משובצות. משימות חדשות יופיעו כאן ברגע שייכנסו.</p></div>`}`;
+        <div class="row between"><span class="tag">${sizeName(x.size)}</span>${x.pay ? `<b style="font-size:20px">${money(x.pay)}</b>` : ''}</div>
+        <h3 style="font-size:19px;font-weight:700;margin:8px 0 2px">${esc(x.apartment)}</h3>
+        <p class="muted">${esc(x.complex || '')}${x.complex && x.address ? ', ' : ''}${esc(x.address || '')}</p>
+        <p style="margin:6px 0 12px;font-weight:600">${fmtShort(x.task_date)}, ${win(x)}</p>
+        ${x.pay ? `<button class="btn lagoon" data-act="claim" data-id="${x.id}">אני לוקח/ת את זה</button>`
+          : `<button class="btn ghost" data-act="tab" data-key="c" data-id="profile">קבעו מחיר ל${sizeName(x.size)} כדי לקחת</button>`}</div>`).join('')
+        : `<div class="card empty"><h3>אין עבודות פתוחות כרגע</h3><p>כשבעל דירה יפרסם ניקיון בלי מנקה קבוע, הוא יופיע כאן.</p></div>`}`;
   },
-  wallet(){
-    const w = S.data.wallet, s = S.data.settings, seg = S.walletSeg;
-    const total = +w.total, pct = Math.round(+w.cap_ratio * 100), hasCap = w.referral_cap != null;
-    const link = location.origin + location.pathname + '?ref=' + S.profile.referral_code;
-    const refs = S.data.refs, pays = S.data.payouts || [];
-    const capNote = hasCap ? `העמלות מוגבלות החודש ל-${money(w.referral_cap)}.` : 'אין תקרה לעמלות: כל עמלה שצברת משולמת.';
-    const showRef = F('referral') && seg === 'ref';
-    return `${F('referral') ? `<div class="seg" role="group"><button aria-pressed="${seg === 'earn'}" data-act="seg" data-v="earn">הכנסות</button><button aria-pressed="${seg === 'ref'}" data-act="seg" data-v="ref">חבר מביא חבר</button></div>` : ''}
-      ${!showRef ? `<section class="card">
-          <div class="row between"><span class="lbl-s">לתשלום על החודש</span><span class="tag">${monthName(today().slice(0,7))}</span></div>
-          <div class="big num" style="margin:6px 0 14px">${money(total)}</div>
-          <div class="lbl-s" style="margin-bottom:6px">ניקיונות ${money(w.task_total)}</div>
-          <div class="bar"><i style="width:${total ? w.task_total / total * 100 : 0}%"></i></div>
-          ${F('referral') || +w.referral_payable ? `<div class="lbl-s" style="margin:12px 0 6px">עמלות שותפים ${money(w.referral_payable)}${w.unlocked ? '' : ' (נעול)'}</div>
-          <div class="bar"><i style="width:${total ? w.referral_payable / total * 100 : 0}%;background:var(--forest2)"></i></div>` : ''}
-          <p class="hint" style="text-align:right">התשלום מועבר בתחילת החודש הבא, על כל מה שאושר החודש.</p>
-        </section>
-        ${+w.pending_review ? `<div class="alert green">עוד ${money(w.pending_review)} ממתינים לאישור בקרת האיכות.</div>` : ''}
-        <section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.coins} תשלומים שקיבלת</h3></div>
-          ${pays.length ? `<ul class="rows">${pays.map(x => `<li class="rowi"><span class="ic ${x.status === 'paid' ? 'lime' : 'orange'}">${x.status === 'paid' ? ICON.check : ICON.clock}</span><span class="mid"><b>${monthName(x.period.slice(0,7))}</b><span>${x.status === 'paid' ? 'הועבר' + (x.reference ? ', אסמכתא ' + esc(x.reference) : '') : 'ממתין להעברה'}</span></span><span class="end amt ${x.status === 'paid' ? 'pos' : ''} num">${money(x.total)}</span></li>`).join('')}</ul>` : '<p class="muted">התשלום הראשון יופיע כאן בתחילת החודש הבא.</p>'}</section>
-        <section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.wallet} תנועות אחרונות</h3></div>
-          ${S.data.entries.length ? `<ul class="rows">${S.data.entries.map(e => `<li class="rowi"><span class="ic ${e.kind === 'referral' ? '' : 'lime'}">${e.kind === 'referral' ? ICON.users : ICON.check}</span><span class="mid"><b>${e.kind === 'referral' ? 'עמלת חבר מביא חבר' : e.kind === 'task' ? 'ניקיון שאושר' : 'התאמה'}</b><span>${new Date(e.created_at).toLocaleDateString('he-IL')}</span></span><span class="end amt pos num">+${money(e.amount)}</span></li>`).join('')}</ul>` : '<p class="muted">הניקיון הראשון שיאושר יופיע כאן.</p>'}</section>`
-      : `<section class="card lime">
-          <div class="row between"><span class="lbl-s" style="color:rgba(31,59,23,.7)">עמלות לתשלום החודש</span><span class="delta">${money(s.referral_fee)} לכל דירה</span></div>
-          <div class="big num" style="margin:6px 0 4px">${money(w.referral_payable)}</div>
-          <div class="mini"><div><span>חברים שהבאת</span><b class="num">${refs.length}</b></div><div><span>דירות שהם ניקו החודש</span><b class="num">${w.referral_count}</b></div></div>
-        </section>
-        ${+w.referral_forfeited > 0 ? `<div class="alert orange">הגעת לתקרה: ${money(w.referral_forfeited)} מעל התקרה לא ישולמו. כל ניקיון נוסף שלך מעלה את התקרה.</div>` : ''}
-        <section class="card lock ${w.unlocked ? 'on' : 'off'}" style="margin-top:12px"><span class="ic">${w.unlocked ? ICON.lockOpen : ICON.lock}</span><div>
-          <b>${w.unlocked ? 'העמלות פתוחות החודש' : 'העמלות נעולות החודש'}</b>
-          <p class="muted small">${w.unlocked ? capNote : 'כדי לקבל עמלות צריך לנקות לפחות דירה אחת בעצמך בכל חודש. ' + capNote}</p></div></section>
-        <section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.share} הקישור האישי שלך</h3></div>
-          <div class="reflink"><code>${esc(link)}</code><button class="btn xs lagoon" data-act="share" data-link="${esc(link)}">שיתוף</button></div></section>
-        <section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.users} הצוות שלך</h3><span class="tag">${refs.length}</span></div>
-          ${refs.length ? `<ul class="rows">${refs.map(r => `<li class="rowi"><span class="av" style="width:40px;height:40px">${initials(r.first_name)}</span><span class="mid"><b>${esc(r.first_name)}</b><span>${r.active ? 'פעיל/ה' : 'בתהליך אישור'}</span></span><span class="end num">${r.approved_this_month} דירות</span></li>`).join('')}</ul>` : '<p class="muted">עוד לא הצטרפו חברים. שלחו את הקישור למי שמחפש עבודה גמישה.</p>'}</section>`}`;
+  earn(){
+    const e = S.data.earn || {}, h = S.data.history || [];
+    return `<section class="card lime">
+        <div class="row between"><span class="lbl-s" style="color:rgba(31,59,23,.7)">הכנסות החודש</span><span class="delta">${+e.count || 0} ניקיונות</span></div>
+        <div class="big num" style="margin:6px 0 4px">${money(e.total)}</div>
+        <div class="mini"><div><span>בעלי הדירות סימנו ששולם</span><b class="num">${money(e.paid)}</b></div><div><span>עוד לא שולם</span><b class="num">${money(e.unpaid)}</b></div></div>
+      </section>
+      <div class="alert info">התשלום מגיע ישירות מבעל הדירה, לפי פרטי התשלום שבפרופיל שלך. CleanEilat לא מחזיקה את הכסף ולא לוקחת עמלה. את החשבונית/קבלה מוציאים לבעל הדירה בעצמך.</div>
+      <section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.check} ניקיונות שאושרו</h3></div>
+        ${h.length ? `<ul class="rows">${h.map(t => `<li class="rowi"><span class="ic ${t.paid_at ? 'lime' : 'orange'}">${t.paid_at ? ICON.check : ICON.clock}</span>
+          <span class="mid"><b>${esc(t.apartment?.name)}</b><span>${fmtShort(t.task_date)}${t.rating ? ` · ${'★'.repeat(t.rating)}` : ''}${t.paid_at ? ' · שולם' : ' · לא שולם עדיין'}</span></span>
+          <span class="end amt ${t.paid_at ? 'pos' : ''} num">${money(payOf(t))}</span></li>`).join('')}</ul>` : '<p class="muted">הניקיון הראשון שיאושר יופיע כאן.</p>'}</section>`;
   },
-  track(){
-    const p = S.profile, s = S.data.settings;
-    if (!F('deposit')) return `<section class="card"><div class="person"><span class="av">${p.avatar_url ? `<img src="${esc(p.avatar_url)}" alt="">` : initials(p.full_name)}</span><div class="info"><h3>${esc(p.full_name)}</h3><div class="kv"><span>${esc(p.email || '')}</span><span dir="ltr">${esc(p.phone || '')}</span>${p.business_type ? `<span>${BIZ[p.business_type]}</span>` : ''}</div></div></div></section>
-      <section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.check} הנהלים</h3></div><ul class="perks" style="margin:0"><li>עמידה בחלון הזמנים, בין 11:00 ל-15:00.</li><li>צילום נזקים לפני תחילת העבודה.</li><li>תיעוד מלא של התוצאה בסיום.</li></ul></section>
-      <button class="btn ghost" style="margin-top:12px;background:#fff;box-shadow:none" data-act="signout">יציאה מהחשבון</button>`;
-    return `${p.is_verified ? `<section class="card lime"><span class="vbadge"><i>★</i>מנקה מאומת/ת</span>
-          <ul class="perks"><li>קדימות מוחלטת למשימות בטרמינל.</li><li>תעריף מקסימלי בכל דירה.</li><li>חשיפה ראשונה למשימות חדשות.</li></ul>
-          <p class="muted small" style="margin-top:10px">ערבון של ${money(s.deposit_amount)} מופקד ומוחזר בסיום ההתקשרות.</p></section>`
-      : `<section class="card lime"><span class="lbl-s" style="color:rgba(31,59,23,.7)">מסלול מחויבות ואיכות</span>
-          <div class="big num" style="margin:4px 0">${money(s.deposit_amount)}</div><p class="muted">ערבון חד-פעמי שמוחזר בסיום ההתקשרות</p>
-          <div class="mini"><div><span>תעריף</span><b>מקסימלי</b></div><div><span>הטרמינל</span><b>קדימות</b></div></div></section>
-        <section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.check} הנהלים</h3></div>
-          <ul class="perks" style="margin:0"><li>עמידה בחלון הזמנים, בין 11:00 ל-15:00.</li><li>צילום נזקים לפני תחילת העבודה.</li><li>תיעוד מלא של התוצאה בסיום.</li></ul>
-          ${p.deposit_status === 'requested' ? `<div class="alert green">הבקשה התקבלה. ניצור קשר לתיאום הפקדת הערבון.</div>` : `<button class="btn lagoon" style="margin-top:14px" data-act="deposit">אני רוצה להצטרף למסלול</button>`}
-          <p class="hint">לא רוצים להפקיד? ממשיכים לעבוד כרגיל, עם פחות עדיפות לדירות חדשות.</p></section>`}
-      <section class="card" style="margin-top:12px"><div class="row between"><div><b>${esc(p.full_name)}</b><p class="muted small">${esc(p.email || '')}</p></div><button class="btn sm ghost" data-act="signout">יציאה</button></div></section>`;
+  profile(){
+    const p = S.profile, pr = p.prices || {};
+    return `<section class="card"><div class="person"><span class="av">${p.avatar_url ? `<img src="${esc(p.avatar_url)}" alt="">` : initials(p.full_name)}</span>
+        <div class="info"><div class="row between"><h3>${esc(p.full_name)}</h3>${stars(p.rating, p.rating_count)}</div><div class="kv"><span>${esc(p.email || '')}</span>${p.business_type ? `<span>${BIZ[p.business_type]}</span>` : ''}</div></div></div></section>
+      <form class="card" style="margin-top:12px" data-submit="profile">
+        <div class="card-h"><h3>${ICON.user} הפרופיל שבעלי הדירות רואים</h3></div>
+        <div class="grid2"><label class="f"><span>שם מלא</span><input class="inp" name="full_name" value="${esc(p.full_name || '')}" required></label>
+        <label class="f"><span>טלפון</span><input class="inp" name="phone" type="tel" dir="ltr" value="${esc(p.phone || '')}" required></label></div>
+        <label class="f"><span>אזור</span><input class="inp" name="area" value="${esc(p.area || '')}" placeholder="למשל: שחמון, מרכז העיר"></label>
+        <label class="f"><span>כמה מילים עליך</span><textarea class="inp" name="bio">${esc(p.bio || '')}</textarea></label>
+        <span class="flabel">מחירון לניקיון (₪)</span>
+        <div class="grid2">${SIZES.map(([k, l]) => `<label class="f"><span>${l}</span><input class="inp" type="number" min="0" inputmode="numeric" name="price_${k}" value="${esc(pr[k] ?? '')}" placeholder="—"></label>`).join('')}</div>
+        <label class="f"><span>איך מעבירים לך תשלום</span><input class="inp" name="payment_info" value="${esc(p.payment_info || '')}" placeholder="ביט 050-0000000"><small class="muted" style="display:block;margin-top:4px">מוצג רק לבעלי דירות שאישרת.</small></label>
+        <button class="btn lagoon" type="submit">שמירה</button>
+      </form>
+      <section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.check} הנהלים</h3></div><ul class="perks" style="margin:0"><li>עמידה בחלון הזמנים שבעל הדירה קבע.</li><li>צילום נזקים לפני תחילת העבודה.</li><li>4 תמונות סיום וצ׳ק-ליסט מלא בכל ניקיון.</li></ul></section>
+      <div class="row" style="margin-top:12px"><a class="btn ghost sm" style="background:#fff" href="terms.html">תנאי שימוש</a><button class="btn ghost sm" style="background:#fff" data-act="signout">יציאה מהחשבון</button></div>`;
   }
 };
 
 /* ═════════════ host ═════════════ */
 V.host = {
-  async load(){ const [h, settings] = await Promise.all([api.hostData(), api.settings()]); Object.assign(S.data, h, {settings}); },
+  async load(){
+    S.tab.h ??= 'apts';
+    const [h, contacts, dir, settings, me] = await Promise.all([api.hostData(), api.rpc('my_contacts'), api.rpc('list_cleaners'), api.settings(), api.me()]);
+    S.profile = me;
+    Object.assign(S.data, h, {contacts:(contacts || []).filter(c => c.side === 'cleaner'), dir:dir || [], settings}); S.cfg = settings;
+  },
+  cname(id){ const d = S.data; return d.contacts.find(c => c.id === id)?.full_name || d.dir.find(c => c.id === id)?.full_name || 'המנקה'; },
+  cur(a){ const td = today(), ts = S.data.tasks.filter(t => t.apartment_id === a.id && t.status !== 'cancelled');
+    return ts.find(t => t.task_date === td && t.status !== 'approved') || ts.find(t => ['submitted','needs_fix'].includes(t.status)) || ts.find(t => t.task_date === td)
+      || ts.filter(t => t.task_date < td).sort((x, y) => y.task_date.localeCompare(x.task_date))[0]; },
+  who(t){
+    if (!t.primary_cleaner) return t.offer_status === 'declined' ? ['המנקה לא זמין/ה, פורסם לכל המנקים','orange'] : ['מחכה למנקה','gray'];
+    if (t.offer_status === 'offered') return [`ממתין לאישור של ${first(this.cname(t.primary_cleaner))}`,'orange'];
+    return [this.cname(t.primary_cleaner), 'green'];
+  },
   html(){
-    const {aps, tasks} = S.data, td = today();
-    const cur = a => { const ts = tasks.filter(t => t.apartment_id === a.id);
-      return ts.find(t => t.task_date === td && t.status !== 'approved') || ts.find(t => t.task_date === td) || ts.filter(t => t.task_date < td).sort((x, y) => y.task_date.localeCompare(x.task_date))[0]; };
-    const upcoming = tasks.filter(t => t.task_date > td || (t.task_date === td && ['requested','pending'].includes(t.status))).sort((a, b) => a.task_date.localeCompare(b.task_date));
-    const ready = aps.filter(a => cur(a)?.status === 'approved').length;
-    return topbar() + `<main class="shell">
-      <section class="card">
-        <div class="row between"><span class="lbl-s">מוכנות לאורחים עכשיו</span><span class="tag">${fmtShort(td)}</span></div>
+    const d = S.data, toApprove = d.tasks.filter(t => t.status === 'submitted').length;
+    const main = ({apts:this.apts, clean:this.clean, cleaners:this.cleaners, acct:this.acct})[S.tab.h].call(this);
+    return topbar() + `<main class="shell">${main}</main>` + tabs([['apts','דירות','pool', toApprove || ''], ['clean','ניקיונות','cal'], ['cleaners','מנקים','users'], ['acct','חשבון','user']], 'h');
+  },
+  apts(){
+    const d = S.data, td = today(), aps = d.aps;
+    const ready = aps.filter(a => this.cur(a)?.status === 'approved' && this.cur(a)?.task_date === td).length;
+    const unpaid = d.tasks.filter(t => t.status === 'approved' && !t.paid_at && t.primary_cleaner);
+    if (!aps.length) return `<section class="card lime" style="text-align:center;padding:30px 20px">
+        <div class="circle" style="margin:0 auto 14px;background:#fff">${ICON.pool}</div>
+        <h1 style="font-size:24px">הוסיפו את הדירה הראשונה</h1>
+        <p class="muted" style="margin:6px 0 18px">מדביקים את קישור יומן ה-Airbnb, וכל צ׳ק-אאוט יוצר ניקיון לבד. אפשר גם להזמין ניקיון ידנית.</p>
+        <button class="btn lagoon" data-act="hostApt">הוספת דירה</button></section>
+      <section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.check} מה הלאה</h3></div><ol class="perks" style="margin:0">
+        <li>מוסיפים דירה וקוד כניסה.</li><li>בוחרים מנקה מלשונית ״מנקים״ ושולחים בקשת חיבור.</li><li>כשהמנקה מאשר/ת, כל ניקיון חדש נשלח אליו/ה אוטומטית.</li></ol></section>`;
+    return `<section class="card">
+        <div class="row between"><span class="lbl-s">מוכנות לאורחים היום</span><span class="tag">${fmtShort(td)}</span></div>
         <div class="big num" style="margin:6px 0 14px">${ready}<small>/ ${aps.length}</small></div>
-        <button class="btn lagoon" data-act="hostOrder" ${aps.length ? '' : 'disabled'}>הזמנת ניקיון נוסף / דחוף</button>
+        <div class="row" style="flex-wrap:nowrap"><button class="btn lagoon" style="flex:1" data-act="hostOrder">הזמנת ניקיון</button><button class="btn ghost sm" data-act="hostApt">הוספת דירה</button></div>
       </section>
+      ${unpaid.length ? `<section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.coins} לתשלום למנקים</h3><span class="tag gold">${money(unpaid.reduce((x, t) => x + payOf(t), 0))}</span></div>
+        <ul class="rows">${unpaid.map(t => { const c = d.contacts.find(x => x.id === t.primary_cleaner);
+          return `<li class="rowi"><span class="ic orange">${ICON.coins}</span><span class="mid"><b>${esc(this.cname(t.primary_cleaner))} · ${money(payOf(t))}</b><span>${esc(t.apartment?.name)}, ${fmtShort(t.task_date)}${c?.payment_info ? ` · ${esc(c.payment_info)}` : ''}</span></span>
+          <span class="end"><button class="btn xs lagoon" data-act="hostPaid" data-id="${t.id}">שילמתי</button></span></li>`; }).join('')}</ul></section>` : ''}
       <div class="sec-h"><h2>הדירות שלי</h2><span class="muted small">מתעדכן בזמן אמת</span></div>
-      ${aps.length ? aps.map(a => { const t = cur(a); const [lbl, c] = t ? hostState(t.status) : ['אין ניקיון','gray'];
-        const showPh = t && ['submitted','approved'].includes(t.status);
+      ${aps.map(a => { const t = this.cur(a); const [lbl, c] = t ? hostState(t.status) : ['אין ניקיון','gray'];
+        const sub = t?.status === 'submitted', showPh = t && ['submitted','approved'].includes(t.status);
         return `<div class="card"><div class="apt">
-          <span class="hanger ${c}">${c === 'green' ? ICON.check : c === 'orange' ? ICON.broom : ICON.clock}<b>${lbl}</b>${t ? `<small>${t.task_date === td ? 'היום' : fmtShort(t.task_date)}</small>` : ''}</span>
-          <div class="info"><h3>${esc(a.name)}</h3><p class="meta">${esc(a.complex?.name || '')}${a.address ? ', ' + esc(a.address) : ''}</p>
-            ${t ? `<p class="times">${t.started_at ? `התחלה <b>${fmtTime(t.started_at)}</b>` : `חלון <b>${win(t)}</b>`}${t.finished_at ? `, סיום <b>${fmtTime(t.finished_at)}</b>` : ''}</p>` : ''}
-            ${t?.status === 'submitted' ? '<p class="small muted" style="margin-top:4px">הניקיון הסתיים ועובר בקרת איכות.</p>' : ''}
+          <span class="hanger ${c}">${c === 'green' ? ICON.check : c === 'orange' ? ICON.broom : ICON.clock}<b>${sub ? 'מחכה לאישור שלך' : lbl}</b>${t ? `<small>${t.task_date === td ? 'היום' : fmtShort(t.task_date)}</small>` : ''}</span>
+          <div class="info"><h3>${esc(a.name)}</h3><p class="meta">${esc(a.address || '')}${a.address ? ' · ' : ''}${sizeName(a.size)}</p>
+            <p class="small" style="margin-top:4px">${a.cleaner_id ? `מנקה קבוע/ה: <b>${esc(this.cname(a.cleaner_id))}</b>` : `<button class="linkbtn" data-act="hostApt" data-id="${a.id}">בחירת מנקה קבוע/ה</button>`}</p>
+            <p class="small muted" style="margin-top:2px">${a.ical_error ? `<span style="color:var(--orange-ink)">היומן לא נקרא: ${esc(a.ical_error)}</span>` : a.ical_url ? `יומן מחובר${a.ical_synced_at ? `, עודכן ${fmtTime(a.ical_synced_at)}` : ''}` : 'יומן Airbnb לא מחובר'}</p>
+            ${t && !['approved','cancelled'].includes(t.status) ? `<p class="times">${t.arrived_at ? `הגעה <b>${fmtTime(t.arrived_at)}</b>` : `חלון <b>${win(t)}</b>`}${t.finished_at ? `, סיום <b>${fmtTime(t.finished_at)}</b>` : ''}</p>` : ''}
             ${t?.damage_notes ? `<p class="small" style="margin-top:6px;color:var(--orange-ink)"><b>תועד בכניסה:</b> ${esc(t.damage_notes)}</p>` : ''}
           </div></div>
-          ${showPh ? `<div class="ph-grid four" style="margin-top:14px">${SLOTS.map(([k, l]) => img(t.photos?.[k], l)).join('')}</div>` : ''}
-        </div>`; }).join('') : `<div class="card empty"><h3>עוד אין דירות בחשבון</h3><p>הצוות שלנו מקים את הדירות שלך. נעדכן כשהן מוכנות.</p></div>`}
-      ${upcoming.length ? `<div class="sec-h"><h2>ניקיונות קרובים</h2></div><div class="card"><ul class="ledger">${upcoming.map(t => `<li><div><b>${esc(t.apartment?.name)}</b><p class="muted small">${fmtShort(t.task_date)}, ${win(t)}${t.is_urgent ? ', דחוף' : ''}</p></div>${chip(t.status)}</li>`).join('')}</ul></div>` : ''}
-      <button class="btn ghost" style="margin-top:20px" data-act="signout">יציאה</button>
-    </main>`;
+          ${sub && t.before_photos?.length ? `<p class="small muted" style="margin:12px 0 6px">לפני הניקיון</p><div class="strip">${t.before_photos.map(p => img(p)).join('')}</div>` : ''}
+          ${showPh ? `<div class="ph-grid four" style="margin-top:12px">${SLOTS.map(([k, l]) => img(t.photos?.[k], l)).join('')}</div>` : ''}
+          ${sub ? `<div class="row" style="margin-top:14px;flex-wrap:nowrap"><button class="btn green" style="flex:1" data-act="hostApprove" data-id="${t.id}">אישור הניקיון</button><button class="btn orange sm" style="min-height:54px" data-act="hostFix" data-id="${t.id}">דרוש תיקון</button></div>` : ''}
+          <div class="row" style="margin-top:12px;gap:8px"><button class="btn xs ghost" data-act="hostApt" data-id="${a.id}">עריכה</button>${a.ical_url ? `<button class="btn xs ghost" data-act="hostSync" data-id="${a.id}">סנכרון יומן עכשיו</button>` : ''}</div>
+        </div>`; }).join('')}`;
+  },
+  clean(){
+    const d = S.data, td = today();
+    const up = d.tasks.filter(t => t.task_date >= td && !['approved','cancelled'].includes(t.status)).sort((a, b) => a.task_date.localeCompare(b.task_date));
+    const past = d.tasks.filter(t => t.status === 'approved').sort((a, b) => b.task_date.localeCompare(a.task_date)).slice(0, 15);
+    return `<div class="row between" style="margin-bottom:12px"><h2 style="font-size:22px;font-weight:700">ניקיונות קרובים</h2><button class="btn sm lagoon" data-act="hostOrder" ${d.aps.length ? '' : 'disabled'}>הזמנת ניקיון</button></div>
+      ${up.length ? `<div class="card"><ul class="rows">${up.map(t => { const [w, c] = this.who(t);
+        return `<li class="rowi"><span class="ic ${c === 'green' ? 'lime' : c === 'orange' ? 'orange' : ''}">${ICON.cal}</span>
+          <span class="mid"><b>${esc(t.apartment?.name)}</b><span>${t.task_date === td ? 'היום' : fmtShort(t.task_date)}, ${win(t)}${t.source === 'ical' ? ' · מהיומן' : ''}</span><span style="color:var(--${c === 'orange' ? 'orange-ink' : 'ink2'})">${esc(w)}${payOf(t) && t.primary_cleaner ? ` · ${money(payOf(t))}` : ''}</span></span>
+          <span class="end" style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">${chip(t.status)}${['pending','requested'].includes(t.status) ? `<button class="btn xs ghost" data-act="hostCancel" data-id="${t.id}">ביטול</button>` : ''}</span></li>`; }).join('')}</ul></div>`
+        : `<div class="card empty"><h3>אין ניקיונות קרובים</h3><p>${d.aps.some(a => a.ical_url) ? 'כשתיכנס הזמנה ביומן, הניקיון יופיע כאן.' : 'חברו את יומן ה-Airbnb בעריכת הדירה, או הזמינו ניקיון ידנית.'}</p></div>`}
+      <p class="muted small" style="margin-top:10px">ניקיון בדירה עם מנקה קבוע/ה נשלח אליו/ה לאישור. ניקיון בלי מנקה, או שהמנקה לא יכול/ה, מתפרסם לכל המנקים המאומתים, ומי שלוקח/ת ראשון/ה מקבל/ת אותו לפי המחירון שלו/ה.</p>
+      ${past.length ? `<div class="sec-h"><h2>אושרו לאחרונה</h2></div><div class="card"><ul class="rows">${past.map(t => `<li class="rowi"><span class="ic lime">${ICON.check}</span>
+        <span class="mid"><b>${esc(t.apartment?.name)}</b><span>${fmtShort(t.task_date)} · ${esc(this.cname(t.primary_cleaner))}${t.rating ? ` · ${'★'.repeat(t.rating)}` : ''}</span></span>
+        <span class="end">${t.paid_at ? '<span class="chip green">שולם</span>' : `<button class="btn xs lagoon" data-act="hostPaid" data-id="${t.id}">שילמתי ${money(payOf(t))}</button>`}</span></li>`).join('')}</ul></div>` : ''}`;
+  },
+  cleaners(){
+    const d = S.data, mine = d.contacts, ids = new Set(mine.filter(c => c.status !== 'declined').map(c => c.id));
+    const others = d.dir.filter(c => !ids.has(c.id));
+    const pCard = (c, actions) => `<div class="card person"><span class="av">${c.avatar_url ? `<img src="${esc(c.avatar_url)}" alt="">` : initials(c.full_name)}</span><div class="info">
+      <div class="row between"><h3>${esc(c.full_name)}</h3>${stars(c.rating, c.rating_count)}</div>
+      <div class="kv">${c.area ? `<span>${esc(c.area)}</span>` : ''}<span>${priceLine(c.prices)}</span></div>
+      ${c.bio ? `<p class="small muted" style="margin-top:6px">${esc(c.bio)}</p>` : ''}${actions}</div></div>`;
+    return `<div class="sec-h" style="margin-top:0"><h2>המנקים שלי</h2><span class="muted">${mine.filter(c => c.status === 'accepted').length}</span></div>
+      ${mine.length ? mine.map(c => pCard(c, c.status === 'accepted'
+        ? `<div class="kv" style="margin-top:8px">${c.phone ? `<a href="tel:${esc(c.phone)}" dir="ltr">${esc(c.phone)}</a>` : ''}${c.payment_info ? `<span>תשלום: <b>${esc(c.payment_info)}</b></span>` : ''}</div>`
+        : `<p class="small" style="margin-top:8px">${c.status === 'pending' ? '<span class="tag">ממתין לאישור המנקה</span>' : '<span class="tag">המנקה לא אישר/ה</span>'}</p>`)).join('')
+        : '<div class="card"><p class="muted">עוד לא נוצר חיבור עם מנקה. בחרו מהרשימה למטה ושלחו בקשה.</p></div>'}
+      <div class="sec-h"><h2>מנקים באילת</h2><span class="muted">${others.length}</span></div>
+      <p class="muted small" style="margin:-4px 0 10px">הטלפון ופרטי התשלום נפתחים אחרי שהמנקה מאשר/ת את הבקשה.</p>
+      ${others.length ? others.map(c => pCard(c, `<button class="btn xs lagoon" style="margin-top:10px" data-act="connReq" data-id="${c.id}">בקשה לעבוד יחד</button>`)).join('')
+        : '<div class="card"><p class="muted">אין כרגע מנקים נוספים ברשימה. מנקים חדשים מצטרפים כל הזמן.</p></div>'}`;
+  },
+  acct(){
+    const p = S.profile, s = S.data.settings || {}, fee = money(s.monthly_fee || 49);
+    const trial = p.sub_status === 'trial', left = p.trial_ends ? Math.ceil((new Date(p.trial_ends + 'T12:00:00Z') - new Date(today() + 'T12:00:00Z')) / 864e5) : null;
+    return `<section class="card lime">
+        <span class="lbl-s" style="color:rgba(31,59,23,.7)">${trial ? 'תקופת ניסיון חינם' : p.sub_status === 'active' ? 'מנוי פעיל' : 'מנוי'}</span>
+        <div class="big num" style="margin:4px 0">${trial && left != null ? `${Math.max(0, left)} ימים` : fee}</div>
+        <p class="muted">${trial ? `נשארו בתקופת הניסיון${p.trial_ends ? `, עד ${fmtShort(p.trial_ends)}` : ''}. אחרי זה ${fee} לחודש לכל דירה, ולא נגבה כלום בלי לעדכן אותך קודם.` : `${fee} לחודש לכל דירה.`}</p>
+      </section>
+      <form class="card" style="margin-top:12px" data-submit="hostProfile"><div class="card-h"><h3>${ICON.user} הפרטים שלי</h3></div>
+        <div class="grid2"><label class="f"><span>שם מלא</span><input class="inp" name="full_name" value="${esc(p.full_name || '')}" required></label>
+        <label class="f"><span>טלפון</span><input class="inp" name="phone" type="tel" dir="ltr" value="${esc(p.phone || '')}" required></label></div>
+        <p class="muted small" style="margin-bottom:12px">${esc(p.email || '')}. הטלפון מוצג רק למנקים שעובדים איתך.</p>
+        <button class="btn sm lagoon" type="submit">שמירה</button></form>
+      <section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.check} איך זה עובד</h3></div><ul class="perks" style="margin:0">
+        <li>המנקים הם עצמאיים. את/ה בוחר/ת עם מי לעבוד, והם קובעים את המחיר.</li>
+        <li>התשלום עובר ממך ישירות למנקה, והוא/היא מוציא/ה לך קבלה.</li>
+        <li>CleanEilat מספקת את התוכנה: סנכרון יומן, תיעוד ותמונות.</li></ul></section>
+      <div class="row" style="margin-top:12px"><a class="btn ghost sm" style="background:#fff" href="terms.html">תנאי שימוש</a><button class="btn ghost sm" style="background:#fff" data-act="signout">יציאה מהחשבון</button></div>`;
+  },
+  aptForm(a = {}){
+    const ok = S.data.contacts.filter(c => c.status === 'accepted');
+    return `<h2>${a.id ? 'עריכת דירה' : 'דירה חדשה'}</h2><form data-submit="hostApt" data-id="${a.id || ''}">
+      <label class="f"><span>שם הדירה</span><input class="inp" name="name" required value="${esc(a.name || '')}" placeholder="למשל: הטרמינל, סוויטה 12"></label>
+      <div class="grid2"><label class="f"><span>כתובת</span><input class="inp" name="address" required value="${esc(a.address || '')}" placeholder="רחוב ומספר"></label>
+      <label class="f"><span>גודל</span><select class="inp" name="size">${SIZES.map(([k, l]) => `<option value="${k}" ${(a.size || '1') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
+      <div class="grid2"><label class="f"><span>קוד כניסה</span><input class="inp" name="entry_code" value="${esc(a.secret?.entry_code || '')}" dir="ltr" autocomplete="off"></label>
+      <label class="f"><span>כספת / מפתח</span><input class="inp" name="lockbox_notes" value="${esc(a.secret?.lockbox_notes || '')}"></label></div>
+      <p class="muted small" style="margin:-6px 0 12px">הקוד נחשף למנקה רק ביום הניקיון, כשהוא/היא לוחץ/ת ״הגעתי לדירה״.</p>
+      <label class="f"><span>קישור יומן Airbnb / Booking (iCal)</span><input class="inp" name="ical_url" type="url" dir="ltr" placeholder="https://www.airbnb.com/calendar/ical/....ics" value="${esc(a.ical_url || '')}">
+        <small class="muted" style="display:block;margin-top:4px">ב-Airbnb: לוח שנה ← זמינות ← חיבור לוחות שנה ← ייצוא לוח שנה, ומעתיקים את הקישור. כל צ׳ק-אאוט ייצור ניקיון אוטומטית.</small></label>
+      <label class="f"><span>מנקה קבוע/ה</span><select class="inp" name="cleaner_id"><option value="">בלי, לפרסם לכל המנקים</option>${ok.map(c => `<option value="${c.id}" ${a.cleaner_id === c.id ? 'selected' : ''}>${esc(c.full_name)}</option>`).join('')}</select>
+        ${ok.length ? '' : '<small class="muted" style="display:block;margin-top:4px">כדי לבחור מנקה קבוע/ה, שלחו קודם בקשה בלשונית ״מנקים״.</small>'}</label>
+      <label class="f"><span>הערות למנקה (לא חובה)</span><textarea class="inp" name="notes" placeholder="למשל: מצעים נקיים בארון בחדר השינה">${esc(a.notes || '')}</textarea></label>
+      <div class="row"><button class="btn lagoon" type="submit" style="flex:1">שמירה</button><button class="btn ghost sm" type="button" data-act="closeModal" data-force="1">ביטול</button></div></form>`;
   }
 };
 
 /* ═════════════ admin ═════════════ */
 V.admin = {
   async load(){
-    S.tab.a ??= 'board';
-    S.payMonth ??= addDays(today().slice(0,8) + '01', -1).slice(0,7);
-    const [profiles, aps, complexes, day, qa, month, settings, pay] = await Promise.all([
-      api.profiles(), api.apartments(), api.complexes(), api.tasksOn(S.adminDate), api.qaTasks(), api.monthTasks(S.finMonth), api.settings(), api.rpc('payout_preview', {p_month:S.payMonth + '-01'})
+    S.tab.a ??= 'over';
+    const [profiles, aps, complexes, day, qa, settings, over] = await Promise.all([
+      api.profiles(), api.apartments(), api.complexes(), api.tasksOn(S.adminDate), api.qaTasks(), api.settings(), api.rpc('admin_overview')
     ]);
-    Object.assign(S.data, {profiles, aps, complexes, day, qa, month, settings, pay}); S.cfg = settings;
+    Object.assign(S.data, {profiles, aps, complexes, day, qa, settings, over}); S.cfg = settings;
   },
   name(id){ return S.data.profiles.find(p => p.id === id)?.full_name || '—'; },
   html(){
     const d = S.data;
     const pend = d.profiles.filter(p => p.status === 'submitted').length;
-    const qaN = d.qa.filter(t => t.status === 'submitted').length;
-    const main = ({board:this.board, qa:this.qaView, fin:this.fin, pay:this.payView, people:this.people, apts:this.apts})[S.tab.a].call(this);
-    return topbar() + `<main class="shell wide">` + tabs([['board','לוח שיבוץ','cal'], ['qa','בקרת איכות','eye', qaN || ''], ['fin','כספים','coins'], ['pay','תשלומים','wallet', d.pay.filter(x => x.payout_status === 'pending').length || ''], ['people','משתמשים','users', pend || ''], ['apts','דירות','pool']], 'a', true) + main + `</main>`;
+    const qaN = d.qa.filter(t => t.status === 'submitted' && !t.apartment?.host_id).length;
+    const main = ({over:this.over, board:this.board, qa:this.qaView, people:this.people, apts:this.apts})[S.tab.a].call(this);
+    return topbar() + `<main class="shell wide">` + tabs([['over','סקירה','coins'], ['board','ניקיונות','cal'], ['qa','תמונות','eye', qaN || ''], ['people','משתמשים','users', pend || ''], ['apts','דירות','pool']], 'a', true) + main + `</main>`;
+  },
+  over(){
+    const o = S.data.over || {}, s = S.data.settings;
+    return `<div class="stats">
+        <div class="kpi"><b>${o.hosts ?? 0}</b><span>בעלי דירות</span></div>
+        <div class="kpi"><b>${o.apartments ?? 0}</b><span>דירות פעילות</span></div>
+        <div class="kpi"><b>${o.cleaners ?? 0}</b><span>מנקים מאושרים</span></div>
+        <div class="kpi"><b style="color:${o.pending_cleaners ? 'var(--orange)' : 'inherit'}">${o.pending_cleaners ?? 0}</b><span>ממתינים לאימות</span></div>
+      </div>
+      <div class="stats">
+        <div class="kpi"><b>${o.paying_apartments ?? 0}</b><span>דירות במנוי משלם</span></div>
+        <div class="kpi"><b style="color:var(--green)">${money(o.mrr)}</b><span>הכנסה חודשית ממנויים</span></div>
+        <div class="kpi"><b>${o.cleanings_month ?? 0}</b><span>ניקיונות שאושרו החודש</span></div>
+        <div class="kpi"><b>${o.synced_apartments ?? 0}</b><span>דירות עם יומן מחובר</span></div>
+      </div>
+      <div class="alert info">הכסף על הניקיונות עובר ישירות מבעל הדירה למנקה. ההכנסה של CleanEilat היא רק מנוי לדירה. כרגע אין סליקה, ומסמנים מנוי כ״פעיל״ ידנית בלשונית משתמשים.</div>
+      <form class="card" style="margin-top:12px" data-submit="settings"><div class="card-h"><h3>${ICON.coins} מנוי</h3></div><div class="grid2">
+        <label class="f"><span>מחיר לדירה לחודש (₪)</span><input class="inp" name="monthly_fee" type="number" min="0" value="${s.monthly_fee ?? 49}"></label>
+        <label class="f"><span>ימי ניסיון לבעל דירה חדש</span><input class="inp" name="trial_days" type="number" min="0" value="${s.trial_days ?? 30}"></label></div>
+        <button class="btn sm lagoon" type="submit">שמירה</button></form>`;
   },
   board(){
     const d = S.data, td = S.adminDate;
@@ -1138,73 +1342,12 @@ V.admin = {
         ${t.before_photos?.length ? `<p class="small muted" style="margin-bottom:6px">לפני הניקיון</p><div class="strip">${t.before_photos.map(p => img(p)).join('')}</div>` : ''}
         <p class="small muted" style="margin:10px 0 6px">אחרי הניקיון</p>
         <div class="ph-grid four">${SLOTS.map(([k, l]) => img(t.photos?.[k], l)).join('')}</div>
-        ${t.status === 'submitted' ? `<div class="row" style="margin-top:14px;flex-wrap:nowrap"><button class="btn green" data-act="approve" data-id="${t.id}">אשר ניקיון, שחרר ${money(pay)}</button><button class="btn orange sm" style="min-height:54px" data-act="fix" data-id="${t.id}">דרוש תיקון</button></div>` : ''}
+        ${t.status === 'submitted' && !a.host_id ? `<div class="row" style="margin-top:14px;flex-wrap:nowrap"><button class="btn green" data-act="approve" data-id="${t.id}">אישור ניקיון</button><button class="btn orange sm" style="min-height:54px" data-act="fix" data-id="${t.id}">דרוש תיקון</button></div>`
+          : t.status === 'submitted' ? '<p class="muted small" style="margin-top:12px">ממתין לאישור בעל הדירה.</p>' : ''}
       </article>`; };
-    return `<div class="row between" style="margin-bottom:12px"><h2 style="font-size:22px;font-weight:800">ממתינים לאישור</h2><span class="muted small">הפיד מתעדכן בזמן אמת</span></div>
-      ${sub.length ? `<div class="qa">${sub.map(card).join('')}</div>` : `<div class="card empty"><h3>הכול אושר</h3><p>ניקיונות שיסתיימו יופיעו כאן עם התמונות, מיד כשהמנקה לוחץ על סיום.</p></div>`}
+    return `<div class="row between" style="margin-bottom:12px"><h2 style="font-size:22px;font-weight:800">ניקיונות שהסתיימו</h2><span class="muted small">בעל הדירה מאשר. כאן מאשרים רק דירות בלי בעל דירה רשום.</span></div>
+      ${sub.length ? `<div class="qa">${sub.map(card).join('')}</div>` : `<div class="card empty"><h3>אין ניקיונות שמחכים</h3><p>ניקיונות שיסתיימו יופיעו כאן עם התמונות, מיד כשהמנקה לוחץ על סיום.</p></div>`}
       ${done.length ? `<div class="sec-h"><h2>אושרו היום</h2><span class="muted">${done.length}</span></div><div class="qa">${done.map(card).join('')}</div>` : ''}`;
-  },
-  fin(){
-    const d = S.data, m = d.month, s = d.settings;
-    const sum = f => m.reduce((x, t) => x + (+f(t) || 0), 0);
-    const rev = sum(t => t.host_price), pay = sum(t => t.cleaner_pay), ref = sum(t => t.referral_fee), net = rev - pay - ref;
-    const pct = v => rev ? (v / rev * 100) : 0;
-    const by = {}; m.forEach(t => { const k = t.apartment?.complex?.name || 'ללא מתחם'; const o = by[k] ??= {n:0, rev:0, pay:0, ref:0}; o.n++; o.rev += +t.host_price || 0; o.pay += +t.cleaner_pay || 0; o.ref += +t.referral_fee || 0; });
-    return `<div class="toolbar"><label class="sr" for="fm">חודש</label><input id="fm" class="inp" style="max-width:200px" type="month" value="${S.finMonth}" data-change="month"><b>${monthName(S.finMonth)}</b></div>
-      <div class="stats">
-        <div class="kpi"><b>${money(rev)}</b><span>הכנסות מבעלי דירות</span></div>
-        <div class="kpi"><b>${money(pay)}</b><span>תשלומים למנקים</span></div>
-        <div class="kpi"><b>${money(ref)}</b><span>עמלות חבר מביא חבר</span></div>
-        <div class="kpi"><b style="color:var(--green)">${money(net)}</b><span>רווח נקי, ${pct(net).toFixed(0)}%</span></div>
-      </div>
-      <div class="card"><b>לאן הולך כל שקל</b>
-        <div class="bars" role="img" aria-label="פילוח הכנסות"><i style="width:${pct(pay)}%;background:var(--ink)"></i><i style="width:${pct(ref)}%;background:var(--reef)"></i><i style="width:${pct(net)}%;background:var(--green)"></i></div>
-        <div class="legend"><span style="--c:var(--ink)">מנקים ${pct(pay).toFixed(0)}%</span><span style="--c:var(--reef)">עמלות ${pct(ref).toFixed(0)}%</span><span style="--c:var(--green)">רווח ${pct(net).toFixed(0)}%</span></div></div>
-      <div class="sec-h"><h2>לפי מתחם</h2><span class="muted small">${m.length} ניקיונות שאושרו</span></div>
-      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>מתחם</th><th>ניקיונות</th><th>הכנסה</th><th>מנקים</th><th>עמלות</th><th>רווח</th></tr></thead><tbody>
-        ${Object.entries(by).map(([k, o]) => `<tr><td><b>${esc(k)}</b></td><td>${o.n}</td><td>${money(o.rev)}</td><td>${money(o.pay)}</td><td>${money(o.ref)}</td><td><b>${money(o.rev - o.pay - o.ref)}</b></td></tr>`).join('') || '<tr><td colspan="6" class="muted">אין ניקיונות מאושרים בחודש הזה</td></tr>'}
-      </tbody></table></div>
-      <div class="sec-h"><h2>תמחור לדירה</h2><span class="muted small">רווח לניקיון, כולל עמלת שותף</span></div>
-      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>דירה</th><th>מחיר לבעל הדירה</th><th>תעריף רגיל</th><th>תעריף מאומת</th><th>רווח (רגיל)</th><th>רווח (מאומת)</th></tr></thead><tbody>
-        ${d.aps.map(a => `<tr><td><b>${esc(a.name)}</b></td><td>${money(a.host_price)}</td><td>${money(a.rate_base)}</td><td>${money(a.rate_max)}</td><td>${money(a.host_price - a.rate_base - s.referral_fee)}</td><td>${money(a.host_price - a.rate_max - s.referral_fee)}</td></tr>`).join('')}
-      </tbody></table></div>
-      <div class="sec-h"><h2>הגדרות עמלות</h2></div>
-      <form class="card" data-submit="settings"><div class="grid2">
-        <label class="f"><span>עמלת חבר מביא חבר לדירה (₪)</span><input class="inp" name="referral_fee" type="number" min="0" value="${s.referral_fee}"></label>
-        <label class="f"><span>תוספת לניקיון דחוף (₪)</span><input class="inp" name="urgent_surcharge" type="number" min="0" value="${s.urgent_surcharge}"></label>
-        <label class="f"><span>בלעדיות למאומתים בלוח (שעות)</span><input class="inp" name="pool_delay_hours" type="number" min="0" value="${s.pool_delay_hours}"></label>
-        <label class="f"><span>גובה הפיקדון (₪)</span><input class="inp" name="deposit_amount" type="number" min="0" value="${s.deposit_amount}"></label>
-        <label class="f"><span>תקרת עמלות: % מהכנסת הניקיון (0 = ללא)</span><input class="inp" name="cap_pct" type="number" min="0" max="500" value="${Math.round(s.referral_cap_ratio * 100)}"></label>
-        <label class="f"><span>תקרת עמלות חודשית לאדם (₪, 0 = ללא)</span><input class="inp" name="referral_monthly_cap" type="number" min="0" value="${s.referral_monthly_cap}"></label>
-        <label class="f"><span>חודשי עמלה לכל חבר (0 = ללא הגבלה)</span><input class="inp" name="referral_months" type="number" min="0" value="${s.referral_months}"></label>
-      </div>
-      <ul class="checks"><li><label><input type="checkbox" name="feature_deposit" ${s.feature_deposit ? 'checked' : ''}><span>מסלול מאומת עם פיקדון</span></label></li><li><label><input type="checkbox" name="feature_referral" ${s.feature_referral ? 'checked' : ''}><span>תוכנית חבר מביא חבר</span></label></li></ul>
-      <button class="btn sm lagoon" type="submit">שמירת הגדרות</button></form>`;
-  },
-  payView(){
-    const d = S.data, s = d.settings, rows = d.pay, cur = today().slice(0,7), closed = S.payMonth < cur;
-    const sum = f => rows.reduce((x, r) => x + (+f(r) || 0), 0);
-    const toPay = sum(r => r.payout_status === 'paid' ? 0 : r.total), saved = sum(r => r.referral_forfeited);
-    const notCreated = rows.filter(r => !r.payout_id && +r.total > 0).length;
-    return `<div class="toolbar"><label class="sr" for="pm">חודש</label><input id="pm" class="inp" style="max-width:200px;background:#fff" type="month" value="${S.payMonth}" max="${cur}" data-change="payMonth"><b>${monthName(S.payMonth)}</b><span style="flex:1"></span>
-        ${closed && notCreated ? `<button class="btn sm lagoon" data-act="createPayouts">הפקת תשלומים (${notCreated})</button>` : ''}
-        ${rows.some(r => r.payout_id) ? `<button class="btn sm ghost" style="background:#fff" data-act="exportPayouts">ייצוא לבנק (CSV)</button>` : ''}</div>
-      ${!closed ? `<div class="alert info">החודש עוד לא הסתיים. זו תצוגה מקדימה, ואפשר להפיק תשלומים רק לחודש שנגמר.</div>` : ''}
-      <div class="stats">
-        <div class="kpi"><b>${money(toPay)}</b><span>להעביר</span></div>
-        <div class="kpi"><b>${money(sum(r => r.task_amount))}</b><span>על ניקיונות</span></div>
-        <div class="kpi"><b>${money(sum(r => r.referral_paid))}</b><span>עמלות שמשולמות</span></div>
-        <div class="kpi"><b>${rows.filter(r => +r.total > 0).length}</b><span>מקבלי תשלום</span></div>
-      </div>
-      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>מנקה</th><th>ניקיונות</th><th>עמלות שנצברו</th><th>תקרה</th><th>עמלות לתשלום</th><th>נחסך</th><th>סה״כ</th><th>סטטוס</th></tr></thead><tbody>
-        ${rows.map(r => `<tr><td><b>${esc(r.full_name)}</b>${r.is_verified ? ' ★' : ''}</td><td>${money(r.task_amount)}</td><td>${money(r.referral_earned)}</td><td>${!r.unlocked ? 'נעול' : r.cap == null ? 'ללא' : money(r.cap)}</td><td>${money(r.referral_paid)}</td><td>${+r.referral_forfeited ? `<span style="color:var(--orange-ink)">${money(r.referral_forfeited)}</span>` : '—'}</td><td><b>${money(r.total)}</b></td>
-          <td>${r.payout_status === 'paid' ? `<span class="chip green">שולם${r.reference ? ' · ' + esc(r.reference) : ''}</span>` : r.payout_status === 'pending' ? `<button class="btn xs lagoon" data-act="markPaid" data-id="${r.payout_id}">סמן כשולם</button>` : `<span class="chip gray">${closed ? 'טרם הופק' : 'תצוגה מקדימה'}</span>`}</td></tr>`).join('') || '<tr><td colspan="8" class="muted">אין הכנסות בחודש הזה.</td></tr>'}
-      </tbody></table></div>
-      <section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.check} הכללים</h3></div><ul class="perks" style="margin:0">
-        <li>עמלות משולמות רק למי שניקה בעצמו באותו חודש.</li>
-        <li>${+s.referral_cap_ratio || +s.referral_monthly_cap ? `תקרה פעילה: ${+s.referral_cap_ratio ? `עד ${Math.round(s.referral_cap_ratio * 100)}% מהכנסות הניקיון` : ''}${+s.referral_cap_ratio && +s.referral_monthly_cap ? ' ו' : ''}${+s.referral_monthly_cap ? `עד ${money(s.referral_monthly_cap)} בחודש` : ''}.` : 'אין תקרה לעמלות. אפשר להגדיר תקרה בלשונית כספים.'}</li>
-        <li>${+s.referral_months ? `עמלה על כל חבר רק ב-${s.referral_months} החודשים הראשונים שלו.` : 'עמלה על חבר כל עוד הוא עובד, ללא הגבלת זמן.'}</li>
-        <li>כל תשלום מתועד: מה הועבר, מתי ובאיזו אסמכתא, מול קבלה של המנקה.</li></ul></section>`;
   },
   people(){
     const d = S.data, pend = d.profiles.filter(p => p.status === 'submitted');
@@ -1225,14 +1368,15 @@ V.admin = {
         : `<div class="card"><p class="muted">אין בקשות חדשות. שלחו את קישור האתר למנקים ולבעלי דירות כדי להתחיל לגייס.</p></div>`}
       <div class="two-col" style="margin-top:8px"><section><div class="sec-h"><h2>מנקים</h2><span class="muted">${cleaners.length}</span></div>
         ${cleaners.map(p => `<div class="card person"><span class="av">${initials(p.full_name)}</span><div class="info">
-          <div class="row between"><h3>${esc(p.full_name)} ${p.is_verified ? '<span class="tag gold">★ מאומת</span>' : ''}</h3>${p.status !== 'approved' ? chip('pending') : ''}</div>
-          <div class="kv"><span>הביא/ה <b>${refCount(p.id)}</b></span>${p.referred_by ? `<span>הופנה ע״י <b>${esc(this.name(p.referred_by))}</b></span>` : ''}<span dir="ltr">${esc(p.phone || '')}</span></div>
+          <div class="row between"><h3>${esc(p.full_name)}</h3>${p.status !== 'approved' ? chip('pending') : stars(p.rating, p.rating_count)}</div>
+          <div class="kv"><span>${priceLine(p.prices)}</span>${p.area ? `<span>${esc(p.area)}</span>` : ''}<span dir="ltr">${esc(p.phone || '')}</span></div>
           ${!F('deposit') ? '' : `<div class="row" style="margin-top:10px"><label class="small muted">פיקדון</label>
             <select class="inp" style="min-height:38px;width:auto;padding:0 8px" data-change="deposit" data-id="${p.id}">${[['none','לא הופקד'], ['requested','ביקש/ה להצטרף'], ['paid','הופקד'], ['refunded','הוחזר']].map(([v, l]) => `<option value="${v}" ${p.deposit_status === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
             <button class="btn xs ${p.is_verified ? 'ghost' : 'lagoon'}" data-act="verify" data-id="${p.id}" data-v="${p.is_verified ? '' : 1}">${p.is_verified ? 'ביטול אימות' : 'סמן כמאומת'}</button></div>`}</div></div>`).join('') || '<p class="muted">אין עדיין מנקים.</p>'}
       </section><section><div class="sec-h"><h2>בעלי דירות</h2><span class="muted">${hosts.length}</span></div>
         ${hosts.map(p => `<div class="card person"><span class="av">${initials(p.full_name)}</span><div class="info"><h3>${esc(p.full_name)}</h3>
-          <div class="kv"><span>${d.aps.filter(a => a.host_id === p.id).length} דירות</span><span dir="ltr">${esc(p.phone || '')}</span><span>${esc(p.email || '')}</span></div></div></div>`).join('') || '<p class="muted">אין עדיין בעלי דירות.</p>'}
+          <div class="kv"><span>${d.aps.filter(a => a.host_id === p.id).length} דירות</span><span dir="ltr">${esc(p.phone || '')}</span><span>${esc(p.email || '')}</span>${p.trial_ends ? `<span>ניסיון עד ${fmtShort(p.trial_ends)}</span>` : ''}</div>
+          <div class="row" style="margin-top:10px"><label class="small muted" for="sub-${p.id}">מנוי</label><select id="sub-${p.id}" class="inp" style="min-height:38px;width:auto;padding:0 8px" data-change="sub" data-id="${p.id}">${[['trial','ניסיון'], ['active','פעיל, משלם'], ['past_due','לא שילם'], ['cancelled','בוטל']].map(([v, l]) => `<option value="${v}" ${p.sub_status === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div></div></div>`).join('') || '<p class="muted">אין עדיין בעלי דירות.</p>'}
       </section></div>`;
   },
   apts(){
@@ -1240,7 +1384,7 @@ V.admin = {
     return `<div class="row between" style="margin-bottom:12px"><h2 style="font-size:22px;font-weight:800">דירות ומתחמים</h2><button class="btn sm lagoon" data-act="aptForm">הוספת דירה</button></div>
       ${d.complexes.map(c => { const list = d.aps.filter(a => a.complex_id === c.id); return `<section class="grp"><div class="grp-h">${esc(c.name)} ${c.is_premium ? '<span class="tag gold">פרימיום</span>' : ''}<span class="muted small">${list.length}</span></div>
         ${list.map(a => `<div class="slot" style="grid-template-columns:1fr auto auto"><div class="nm">${esc(a.name)}<small>${esc(a.address || '')}${a.host_id ? ', ' + esc(this.name(a.host_id)) : ', ללא בעל דירה'}</small></div>
-          <span class="small">${money(a.host_price)} / ${money(a.rate_base)}${F('deposit') ? '–' + money(a.rate_max) : ''}${a.active ? '' : ' <span class="tag red">לא פעילה</span>'}${a.ical_error ? ' <span class="tag red">שגיאת יומן</span>' : a.ical_url ? ' <span class="tag gold">Airbnb מחובר</span>' : ''}</span>
+          <span class="small">${sizeName(a.size)}${a.active ? '' : ' <span class="tag red">לא פעילה</span>'}${a.ical_error ? ' <span class="tag red">שגיאת יומן</span>' : a.ical_url ? ' <span class="tag gold">Airbnb מחובר</span>' : ''}</span>
           <button class="btn xs ghost" data-act="aptForm" data-id="${a.id}">עריכה</button></div>`).join('') || '<p class="muted small">אין דירות במתחם.</p>'}</section>`; }).join('')}
       ${d.aps.filter(a => !a.complex_id).length ? `<section class="grp"><div class="grp-h">ללא מתחם</div>${d.aps.filter(a => !a.complex_id).map(a => `<div class="slot" style="grid-template-columns:1fr auto"><div class="nm">${esc(a.name)}</div><button class="btn xs ghost" data-act="aptForm" data-id="${a.id}">עריכה</button></div>`).join('')}</section>` : ''}
       <form class="card row" style="margin-top:20px" data-submit="complex"><input class="inp" name="name" required placeholder="שם מתחם חדש" style="flex:1;min-width:160px"><label class="row small"><input type="checkbox" name="prem"> פרימיום</label><button class="btn sm ghost" type="submit">הוספת מתחם</button></form>`;
@@ -1252,13 +1396,11 @@ V.admin = {
       <div class="grid2"><label class="f"><span>מתחם</span><select class="inp" name="complex_id"><option value="">ללא</option>${d.complexes.map(c => `<option value="${c.id}" ${a.complex_id === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>
       <label class="f"><span>בעל הדירה</span><select class="inp" name="host_id"><option value="">ללא</option>${hosts.map(h => `<option value="${h.id}" ${a.host_id === h.id ? 'selected' : ''}>${esc(h.full_name)}</option>`).join('')}</select></label></div>
       <label class="f"><span>כתובת</span><input class="inp" name="address" value="${esc(a.address || '')}"></label>
-      <div class="grid2"><label class="f"><span>מחיר לבעל הדירה</span><input class="inp" name="host_price" type="number" required value="${a.host_price ?? 260}"></label>
-      <label class="f"><span>תעריף מנקה רגיל</span><input class="inp" name="rate_base" type="number" required value="${a.rate_base ?? 120}"></label>
-      <label class="f"><span>תעריף מנקה מאומת</span><input class="inp" name="rate_max" type="number" required value="${a.rate_max ?? 150}"></label>
+      <div class="grid2"><label class="f"><span>גודל</span><select class="inp" name="size">${SIZES.map(([k, l]) => `<option value="${k}" ${(a.size || '1') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       <label class="f"><span>קוד כניסה</span><input class="inp" name="entry_code" value="${esc(a.secret?.entry_code || '')}" dir="ltr" autocomplete="off"></label></div>
       <label class="f"><span>קישור יומן Airbnb / Booking (iCal)</span><input class="inp" name="ical_url" type="url" dir="ltr" placeholder="https://www.airbnb.com/calendar/ical/....ics" value="${esc(a.ical_url || '')}"><small class="muted" style="display:block;margin-top:4px">ב-Airbnb: לוח שנה ← זמינות ← חיבור לוחות שנה ← ייצוא. כל צ'ק-אאוט ייצור ניקיון אוטומטית.${a.ical_synced_at ? ' סונכרן לאחרונה: ' + new Date(a.ical_synced_at).toLocaleString('he-IL') : ''}${a.ical_error ? ' שגיאה: ' + esc(a.ical_error) : ''}</small></label>
       <label class="f"><span>הנחיות כספת / מפתח</span><input class="inp" name="lockbox_notes" value="${esc(a.secret?.lockbox_notes || '')}"></label>
-      <div class="row" style="margin-bottom:14px"><label class="row"><input type="checkbox" name="is_premium" ${a.is_premium ? 'checked' : ''}> דירת פרימיום</label><label class="row"><input type="checkbox" name="active" ${a.active !== false ? 'checked' : ''}> פעילה</label></div>
+      <div class="row" style="margin-bottom:14px"><label class="row"><input type="checkbox" name="active" ${a.active !== false ? 'checked' : ''}> פעילה</label></div>
       <div class="row"><button class="btn lagoon" type="submit" style="flex:1">שמירה</button><button class="btn ghost sm" type="button" data-act="closeModal" data-force="1">ביטול</button></div></form>`;
   }
 };
@@ -1274,7 +1416,9 @@ const setPath = (path, v) => {
 const ACT = {
   home(){ S.taskId = null; paint(); },
   demo(){ location.href = location.pathname + '?demo'; },
-  async google(){
+  lpAud(el){ S.lpAud = el.dataset.v; paint(); },
+  async google(el){
+    if (el?.dataset.role) localStorage.setItem('ce_role', el.dataset.role);
     if (DEMO) return toast('זו הדגמה. באתר האמיתי תיפתח התחברות עם Google');
     await run(async () => {
       const st = await fetch(CFG.url + '/auth/v1/settings', {headers:{apikey:CFG.key}}).then(r => r.json()).catch(() => null);
@@ -1305,34 +1449,41 @@ const ACT = {
   recheck: async () => { S.profile = await api.me(); route(); },
 
   /* onboarding */
-  obRole(el){ S.ob.role = el.dataset.v; paint(); },
+  obRole(el){ S.ob.role = el.dataset.v || null; S.ob.step = 0; if (el.dataset.v) localStorage.setItem('ce_role', el.dataset.v); scrollTo(0,0); paint(); },
   obPick(el){ const {k, v, multi} = el.dataset; const a = S.ob.answers; if (multi) { a[k] = a[k] || []; a[k] = a[k].includes(v) ? a[k].filter(x => x !== v) : [...a[k], v]; } else a[k] = v; paint(); },
   obBiz(el){ S.ob.business_type = el.dataset.v; paint(); },
   obBack(){ S.ob.step--; paint(); },
   obNext(){
     const o = S.ob;
-    if (o.step === 0) {
-      if ((o.full_name || '').trim().split(/\s+/).length < 2) return toast('נא למלא שם פרטי ושם משפחה', 'err');
-      if (!/^0\d[\d-]{7,10}$/.test((o.phone || '').replace(/\s/g, ''))) return toast('נא למלא מספר טלפון ישראלי תקין', 'err');
+    if (o.step === 0) { const e = validBasics(o); if (e) return toast(e, 'err'); }
+    if (o.step === 1) {
+      if (!SIZES.some(([k]) => +o.prices?.[k] > 0)) return toast('נא לקבוע מחיר לפחות לגודל דירה אחד', 'err');
+      if (!(o.payment_info || '').trim()) return toast('נא לכתוב איך מעבירים לך תשלום', 'err');
     }
-    o.role ??= S.profile.desired_role; o.step++; scrollTo(0,0); paint();
+    o.step++; scrollTo(0,0); paint();
   },
   obClear(el){ const k = el.dataset.k; S.ob[k + 'File'] = null; S.ob[k + 'Preview'] = null; paint(); },
   async obSubmit(){
-    const o = S.ob, role = o.role;
-    if (!o.idFile) return toast('צריך צילום של תעודת הזהות', 'err');
-    if (role === 'cleaner' && !o.business_type) return toast('נא לבחור סוג עסק', 'err');
-    if (role === 'cleaner' && !o.bizFile) return toast('צריך אישור עוסק', 'err');
-    if (role === 'cleaner' && !(o.business_number || '').trim()) return toast('נא למלא מספר עוסק', 'err');
-    if (!o.agree) return toast('צריך לאשר את התנאים', 'err');
+    const o = S.ob, role = o.role, host = role === 'host';
+    const e = validBasics(o); if (e) return toast(e, 'err');
+    if (!host) {
+      if (!o.business_type) return toast('נא לבחור סוג עסק', 'err');
+      if (!(o.business_number || '').trim()) return toast('נא למלא מספר עוסק', 'err');
+      if (!o.idFile) return toast('צריך צילום של תעודת הזהות', 'err');
+      if (!o.bizFile) return toast('צריך אישור עוסק', 'err');
+    }
+    if (!o.agree) return toast('צריך לאשר את תנאי השימוש', 'err');
     o.sending = true; paint();
     await run(async () => {
       const u = S.profile.id, ts = Date.now();
-      const idPath = await api.upload('kyc', `${u}/id-${ts}.jpg`, o.idFile);
-      const bizPath = o.bizFile ? await api.upload('kyc', `${u}/biz-${ts}.${o.bizFile.type === 'application/pdf' ? 'pdf' : 'jpg'}`, o.bizFile) : null;
-      await api.rpc('submit_onboarding', {p_desired_role:role, p_full_name:o.full_name.trim(), p_phone:o.phone.trim(), p_answers:o.answers, p_business_type:o.business_type || null, p_business_number:o.business_number || null, p_id_doc_path:idPath, p_business_doc_path:bizPath, p_ref:localStorage.getItem('ce_ref') || null});
+      const idPath = host ? null : await api.upload('kyc', `${u}/id-${ts}.jpg`, o.idFile);
+      const bizPath = host ? null : await api.upload('kyc', `${u}/biz-${ts}.${o.bizFile.type === 'application/pdf' ? 'pdf' : 'jpg'}`, o.bizFile);
+      const prices = host ? {} : Object.fromEntries(SIZES.filter(([k]) => +o.prices?.[k] > 0).map(([k]) => [k, +o.prices[k]]));
+      await api.rpc('submit_onboarding_v2', {p_role:role, p_full_name:o.full_name.trim(), p_phone:o.phone.trim(), p_answers:o.answers, p_area:o.answers.area || null, p_bio:host ? null : (o.bio || '').trim() || null,
+        p_prices:prices, p_payment_info:host ? null : o.payment_info.trim(), p_business_type:host ? null : o.business_type, p_business_number:host ? null : o.business_number.trim(), p_id_doc_path:idPath, p_business_doc_path:bizPath});
+      localStorage.removeItem('ce_role');
       S.profile = await api.me();
-    }, 'נשלח לאימות');
+    }, host ? 'החשבון נפתח. החודש הראשון חינם' : 'נשלח לאימות');
     o.sending = false; route();
   },
 
@@ -1360,7 +1511,11 @@ const ACT = {
       delete S.draft[id]; saveDrafts(); await refresh(true);
     }, 'המשימה נשלחה לבקרת איכות');
   },
-  async claim(el){ await run(async () => { await api.rpc('claim_task', {p_task:el.dataset.id}); S.tab.c = 'today'; await refresh(true); }, 'המשימה שלך. היא מחכה ברשימת המשימות'); },
+  async claim(el){ await run(async () => { await api.rpc('claim_task', {p_task:el.dataset.id}); S.tab.c = 'today'; await refresh(true); }, 'הניקיון שלך. הוא מחכה במסך הבית'); },
+  async offer(el){ const ok = !!el.dataset.ok; el.disabled = true;
+    await run(async () => { await api.rpc('respond_task', {p_task:el.dataset.id, p_accept:ok}); if (!ok) S.taskId = null; await refresh(true); }, ok ? 'אישרת. הניקיון ביומן שלך' : 'בעל הדירה יקבל הודעה שהניקיון פורסם למנקים אחרים'); },
+  async connResp(el){ const ok = !!el.dataset.ok;
+    await run(async () => { await api.rpc('respond_connection', {p_host:el.dataset.id, p_accept:ok}); await refresh(true); }, ok ? 'החיבור אושר' : 'הבקשה נדחתה'); },
   async deposit(){ await run(async () => { await api.rpc('request_deposit_track'); await refresh(true); }, 'הבקשה נשלחה'); },
   async share(el){ const link = el.dataset.link; const text = 'מצטרפים איתי ל-CleanEilat, עבודה גמישה בניקיון דירות נופש באילת: ' + link;
     if (navigator.share) { try { await navigator.share({title:'CleanEilat', text, url:link}); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
@@ -1369,15 +1524,37 @@ const ACT = {
 
   /* host */
   hostOrder(){
-    const {aps, settings} = S.data;
+    const {aps} = S.data;
     S.modal = `<h2>הזמנת ניקיון</h2><form data-submit="order">
       <label class="f"><span>דירה</span><select class="inp" name="apt" required>${aps.map(a => `<option value="${a.id}">${esc(a.name)}</option>`).join('')}</select></label>
       <label class="f"><span>תאריך</span><input class="inp" type="date" name="date" min="${today()}" value="${today()}" required></label>
-      <ul class="checks"><li><label><input type="checkbox" name="urgent"><span>דחוף, היום (תוספת ${money(settings.urgent_surcharge)})</span></label></li></ul>
-      <label class="f"><span>הערה לצוות (לא חובה)</span><textarea class="inp" name="note" placeholder="למשל: אורחים מגיעים ב-14:00"></textarea></label>
+      <label class="f"><span>הערה למנקה (לא חובה)</span><textarea class="inp" name="note" placeholder="למשל: אורחים מגיעים ב-14:00"></textarea></label>
+      <p class="muted small" style="margin-bottom:12px">אם לדירה יש מנקה קבוע/ה, ההזמנה נשלחת אליו/ה לאישור. אחרת היא מתפרסמת לכל המנקים.</p>
       <button class="btn lagoon" type="submit">שליחת הזמנה</button></form>`;
     paint();
   },
+  hostApt(el){ const a = el.dataset.id ? S.data.aps.find(x => x.id === el.dataset.id) : {}; S.modal = V.host.aptForm(a); paint(); },
+  hostApprove(el){
+    const t = S.data.tasks.find(x => x.id === el.dataset.id); S.rate = 5;
+    S.modal = `<h2>אישור הניקיון</h2><p class="muted">${esc(t.apartment?.name)} · ${esc(V.host.cname(t.primary_cleaner))}</p>
+      <form data-submit="approve" data-id="${t.id}"><span class="flabel" style="margin-top:14px">דירוג</span>
+      <div class="choices" id="rate">${[1,2,3,4,5].map(n => `<button type="button" class="choice" aria-pressed="${n <= 5}" aria-label="${n} כוכבים" data-act="rate" data-v="${n}">★</button>`).join('')}</div>
+      <label class="f" style="margin-top:14px"><span>מילה למנקה (לא חובה)</span><textarea class="inp" name="review" placeholder="מה היה טוב, מה לשפר"></textarea></label>
+      <p class="muted small" style="margin-bottom:12px">אחרי האישור, נשאר רק להעביר ${payOf(t) ? money(payOf(t)) + ' ' : ''}למנקה ישירות ולסמן ״שילמתי״.</p>
+      <button class="btn green" type="submit">אישור</button></form>`;
+    paint();
+  },
+  rate(el){ S.rate = +el.dataset.v; document.querySelectorAll('#rate .choice').forEach((b, i) => b.setAttribute('aria-pressed', i < S.rate)); },
+  async hostFix(el){ const note = await ask('מה צריך לתקן?', 'למשל: חסרות מגבות בחדר הרחצה, הכיור לא נוקה', 'שליחה למנקה'); if (!note) return;
+    await run(async () => { await api.rpc('host_needs_fix', {p_task:el.dataset.id, p_note:note}); await refresh(true); }, 'נשלח למנקה לתיקון'); },
+  async hostPaid(el){ if (!DEMO && !confirm('לסמן שהעברת את התשלום למנקה?')) return;
+    await run(async () => { await api.rpc('mark_paid', {p_task:el.dataset.id}); await refresh(true); }, 'סומן ששולם'); },
+  async hostCancel(el){ if (!DEMO && !confirm('לבטל את הניקיון?')) return;
+    await run(async () => { await api.rpc('cancel_task', {p_task:el.dataset.id}); await refresh(true); }, 'הניקיון בוטל'); },
+  async hostSync(el){ el.disabled = true; el.textContent = 'מסנכרן…';
+    await run(async () => { const r = await syncNow(el.dataset.id); await refresh(true);
+      toast(r.errors?.length ? 'היומן לא נקרא: ' + r.errors[0].replace(/^[^:]+:\s*/, '') : r.created ? `נוספו ${r.created} ניקיונות מהיומן` : 'היומן מעודכן, אין הזמנות חדשות'); }); },
+  async connReq(el){ el.disabled = true; await run(async () => { await api.rpc('request_connection', {p_cleaner:el.dataset.id}); await refresh(true); }, 'הבקשה נשלחה למנקה'); },
 
   /* admin */
   day(el){ S.adminDate = addDays(S.adminDate, -+el.dataset.n); refresh(); },
@@ -1394,7 +1571,7 @@ const ACT = {
     paint();
   },
   async delTask(el){ if (!DEMO && !confirm('לבטל את הניקיון?')) return; await run(async () => { await api.upd('tasks', el.dataset.id, {status:'cancelled'}); await refresh(true); }, 'הניקיון בוטל'); },
-  async approve(el){ el.disabled = true; await run(async () => { await api.rpc('admin_approve', {p_task:el.dataset.id}); await refresh(true); }, 'הניקיון אושר והתשלום שוחרר לארנק'); },
+  async approve(el){ el.disabled = true; await run(async () => { await api.rpc('admin_approve', {p_task:el.dataset.id}); await refresh(true); }, 'הניקיון אושר'); },
   async fix(el){ const note = await ask('מה צריך לתקן?', 'למשל: חסרות מגבות בחדר הרחצה, הכיור לא נוקה', 'שליחה למנקה'); if (!note) return;
     await run(async () => { await api.rpc('admin_needs_fix', {p_task:el.dataset.id, p_note:note}); await refresh(true); }, 'נשלח למנקה לתיקון'); },
   async review(el){
@@ -1408,21 +1585,6 @@ const ACT = {
     if (DEMO) return toast('בהדגמה אין מסמכים אמיתיים');
     const w = window.open('', '_blank');
     await run(async () => { const u = await api.signedUrl('kyc', el.dataset.p); if (w) w.location = u; else location.href = u; });
-  },
-  async createPayouts(){
-    if (!DEMO && !confirm(`להפיק תשלומים ל${monthName(S.payMonth)}? הסכומים יינעלו לפי הכללים הנוכחיים.`)) return;
-    await run(async () => { const n = await api.rpc('create_payouts', {p_month:S.payMonth + '-01'}); await refresh(true); toast(`הופקו ${n} תשלומים`); });
-  },
-  async markPaid(el){
-    const ref = await ask('סימון כשולם', 'מספר אסמכתא של ההעברה (לא חובה)', 'סמן כשולם'); if (ref === null) return;
-    await run(async () => { await api.rpc('mark_payout_paid', {p_payout:el.dataset.id, p_reference:ref}); await refresh(true); }, 'סומן כשולם');
-  },
-  exportPayouts(){
-    const rows = S.data.pay.filter(r => r.payout_id);
-    const csv = '﻿' + [['שם','טלפון','חודש','ניקיונות','עמלות','סה״כ','סטטוס','אסמכתא'], ...rows.map(r => [r.full_name, r.phone || '', S.payMonth, r.task_amount, r.referral_paid, r.total, r.payout_status === 'paid' ? 'שולם' : 'ממתין', r.reference || ''])]
-      .map(l => l.map(v => '"' + String(v ?? '').replace(/"/g, '""') + '"').join(',')).join('\n');
-    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'})); a.download = `cleaneilat-payouts-${S.payMonth}.csv`; document.body.appendChild(a); a.click(); a.remove();
-    toast('הקובץ ירד');
   },
   async syncIcal(el){
     el.disabled = true; el.textContent = 'מסנכרן…';
@@ -1452,8 +1614,7 @@ const CHG = {
     S.ob[k + 'File'] = blob; S.ob[k + 'Preview'] = f.type === 'application/pdf' ? 'pdf' : URL.createObjectURL(blob); paint();
   },
   date(el){ if (el.value) { S.adminDate = el.value; refresh(); } },
-  month(el){ if (el.value) { S.finMonth = el.value; refresh(); } },
-  payMonth(el){ if (el.value) { S.payMonth = el.value; refresh(); } },
+  async sub(el){ await run(async () => { await api.rpc('admin_set_sub', {p_user:el.dataset.id, p_status:el.value}); await refresh(true); }, 'המנוי עודכן'); },
   async assign(el){
     const {id, f} = el.dataset, t = S.data.day.find(x => x.id === id);
     const patch = {[f]:el.value || null};
@@ -1466,27 +1627,59 @@ const CHG = {
 const SUB = {
   async email(f){
     const email = f.email.value.trim();
+    if (f.dataset.role) localStorage.setItem('ce_role', f.dataset.role);
     if (DEMO) return toast('זו הדגמה');
     await run(async () => { const {error} = await sb.auth.signInWithOtp({email, options:{emailRedirectTo:location.origin + location.pathname}}); if (error) throw error; }, 'שלחנו קישור כניסה למייל. פתחו אותו מהטלפון הזה.');
   },
   ask(f){ const v = f.v.value.trim(); const r = askResolve; askResolve = null; S.modal = null; paint(); r?.(v); },
   async order(f){
+    const ap = S.data.aps.find(a => a.id === f.apt.value);
     await run(async () => {
-      await api.rpc('request_cleaning', {p_apartment:f.apt.value, p_date:f.date.value, p_urgent:f.urgent.checked, p_note:f.note.value});
+      await api.rpc('create_task', {p_apt:f.apt.value, p_date:f.date.value, p_note:f.note.value.trim()});
       S.modal = null; await refresh(true);
-    }, 'ההזמנה נשלחה לצוות');
+    }, ap?.cleaner_id ? `ההזמנה נשלחה ל${V.host.cname(ap.cleaner_id)} לאישור` : 'ההזמנה פורסמה לכל המנקים');
+  },
+  async approve(f){
+    await run(async () => { await api.rpc('host_approve', {p_task:f.dataset.id, p_rating:S.rate || null, p_review:f.review.value.trim()}); S.modal = null; await refresh(true); }, 'הניקיון אושר');
+  },
+  async profile(f){
+    const prices = Object.fromEntries(SIZES.filter(([k]) => +f['price_' + k].value > 0).map(([k]) => [k, +f['price_' + k].value]));
+    await run(async () => { await api.rpc('update_my_profile', {p_full_name:f.full_name.value.trim(), p_phone:f.phone.value.trim(), p_area:f.area.value.trim() || null, p_bio:f.bio.value.trim() || null, p_prices:prices, p_payment_info:f.payment_info.value.trim() || null}); await refresh(true); }, 'הפרופיל נשמר');
+  },
+  async hostProfile(f){
+    const p = S.profile;
+    await run(async () => { await api.rpc('update_my_profile', {p_full_name:f.full_name.value.trim(), p_phone:f.phone.value.trim(), p_area:p.area || null, p_bio:p.bio || null, p_prices:null, p_payment_info:p.payment_info || null}); await refresh(true); }, 'נשמר');
+  },
+  async hostApt(f){
+    const id = f.dataset.id, old = id ? S.data.aps.find(a => a.id === id) : null;
+    const row = {name:f.name.value.trim(), address:f.address.value.trim(), size:f.size.value, notes:f.notes.value.trim() || null, ical_url:f.ical_url.value.trim() || null};
+    if (row.ical_url && !/^https:\/\/.+/i.test(row.ical_url)) return toast('קישור היומן צריך להתחיל ב-https://', 'err');
+    const cleaner = f.cleaner_id.value || null;
+    const btn = f.querySelector('[type=submit]'); btn.disabled = true; btn.textContent = 'שומר…';
+    let msg = 'הדירה נשמרה';
+    await run(async () => {
+      let aptId = id;
+      if (id) await api.upd('apartments', id, row); else aptId = (await api.ins('apartments', {...row, host_id:S.profile.id})).id;
+      await api.secret(aptId, {entry_code:f.entry_code.value.trim(), lockbox_notes:f.lockbox_notes.value.trim()});
+      if ((old?.cleaner_id || null) !== cleaner) await api.rpc('set_apartment_cleaner', {p_apt:aptId, p_cleaner:cleaner});
+      if (row.ical_url && row.ical_url !== old?.ical_url) {
+        const r = await syncNow(aptId);
+        msg = r.errors?.length ? 'הדירה נשמרה, אבל היומן לא נקרא. בדקו את הקישור' : `הדירה נשמרה. נוספו ${r.created} ניקיונות מהיומן`;
+      }
+      S.modal = null; await refresh(true); toast(msg, msg.includes('לא נקרא') ? 'err' : '');
+    });
+    if (S.modal) { btn.disabled = false; btn.textContent = 'שמירה'; }
   },
   async task(f){
     await run(async () => { await api.ins('tasks', {apartment_id:f.apt.value, task_date:S.adminDate, window_start:f.ws.value, window_end:f.we.value, is_urgent:f.urgent.checked}); S.modal = null; await refresh(true); }, 'הניקיון נוסף');
   },
   async settings(f){
-    const v = k => +f[k].value;
-    await run(async () => { await api.upd('settings', 1, {referral_fee:v('referral_fee'), urgent_surcharge:v('urgent_surcharge'), pool_delay_hours:v('pool_delay_hours'), deposit_amount:v('deposit_amount'), referral_cap_ratio:v('cap_pct') / 100, referral_monthly_cap:v('referral_monthly_cap'), referral_months:v('referral_months'), feature_deposit:f.feature_deposit.checked, feature_referral:f.feature_referral.checked, updated_at:nowIso()}); await refresh(true); }, 'ההגדרות נשמרו');
+    await run(async () => { await api.upd('settings', 1, {monthly_fee:+f.monthly_fee.value, trial_days:+f.trial_days.value, updated_at:nowIso()}); await refresh(true); }, 'ההגדרות נשמרו');
   },
   async complex(f){ await run(async () => { await api.ins('complexes', {name:f.name.value.trim(), is_premium:f.prem.checked, sort:S.data.complexes.length + 1}); await refresh(true); }, 'המתחם נוסף'); },
   async apt(f){
     const id = f.dataset.id;
-    const row = {name:f.name.value.trim(), complex_id:f.complex_id.value || null, host_id:f.host_id.value || null, address:f.address.value.trim(), host_price:+f.host_price.value, rate_base:+f.rate_base.value, rate_max:+f.rate_max.value, is_premium:f.is_premium.checked, active:f.active.checked, ical_url:(f.ical_url.value.trim() || null)};
+    const row = {name:f.name.value.trim(), complex_id:f.complex_id.value || null, host_id:f.host_id.value || null, address:f.address.value.trim(), size:f.size.value, active:f.active.checked, ical_url:(f.ical_url.value.trim() || null)};
     if (row.ical_url && !/^https:\/\/.+/i.test(row.ical_url)) return toast('קישור היומן צריך להתחיל ב-https://', 'err');
     await run(async () => {
       let aptId = id;
@@ -1527,7 +1720,8 @@ function live(){
     liveT = setTimeout(() => {
       if (S.modal || document.activeElement?.matches('input,textarea,select')) return;
       if (S.profile?.role === 'admin' && p.new?.status === 'submitted' && p.old?.status !== 'submitted') toast('ניקיון חדש הגיע לבקרת איכות');
-      if (S.profile?.role === 'host' && p.new?.status === 'approved') toast('דירה מוכנה לאורחים');
+      if (S.profile?.role === 'host' && p.new?.status === 'submitted' && p.old?.status !== 'submitted') toast('ניקיון הסתיים ומחכה לאישור שלך');
+      if (S.profile?.role === 'cleaner' && p.new?.offer_status === 'offered' && p.new?.primary_cleaner === S.profile.id) toast('הצעת עבודה חדשה');
       refresh(true);
     }, 700);
   }).subscribe();
