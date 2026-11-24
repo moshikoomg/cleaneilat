@@ -552,6 +552,10 @@ const D = {
         Object.assign(me, {desired_role:a.p_role, full_name:a.p_full_name, phone:a.p_phone, onboarding:a.p_answers, area:a.p_area, bio:a.p_bio, prices:a.p_prices, payment_info:a.p_payment_info, business_type:a.p_business_type, business_number:a.p_business_number, id_doc_path:a.p_id_doc_path, business_doc_path:a.p_business_doc_path});
         if (a.p_role === 'host') Object.assign(me, {role:'host', status:'approved', sub_status:'trial', trial_ends:addDays(today(), s.trial_days)}); else me.status = 'submitted';
         return me.status;
+      case 'delete_apartment': { const ap = this.apartments.find(x => x.id === a.p_apt);
+        if (this.tasks.some(x => x.apartment_id === ap.id && ['arrived','in_progress','submitted','needs_fix'].includes(x.status))) err('יש ניקיון שמתבצע עכשיו בדירה. אפשר להסיר אותה אחרי שהוא יסתיים ויאושר');
+        this.tasks.filter(x => x.apartment_id === ap.id && ['pending','requested'].includes(x.status)).forEach(x => x.status = 'cancelled');
+        Object.assign(ap, {deleted_at:nowIso(), active:false}); return 'archived'; }
       case 'admin_set_sub': this.prof(a.p_user).sub_status = a.p_status; return;
       case 'admin_overview': { const act = this.apartments.filter(x => x.active && x.host_id), paying = act.filter(x => this.prof(x.host_id)?.sub_status === 'active').length;
         return {hosts:this.profiles.filter(p => p.role === 'host').length, cleaners:this.profiles.filter(p => p.role === 'cleaner' && p.status === 'approved').length, pending_cleaners:this.profiles.filter(p => p.status === 'submitted').length, apartments:act.length, paying_apartments:paying, mrr:paying * s.monthly_fee, cleanings_month:this.tasks.filter(x => x.status === 'approved' && (x.approved_at || '').slice(0,7) === today().slice(0,7)).length, synced_apartments:this.apartments.filter(x => x.ical_url).length}; }
@@ -649,13 +653,14 @@ const api = {
   async hostData(){
     const from = addDays(today(), -30), to = addDays(today(), 90);
     if (DEMO) {
-      const aps = D.apartments.filter(a => a.host_id === S.profile.id).map(a => ({...a, complex:D.complexes.find(c => c.id === a.complex_id), secret:D.secrets[a.id] || {}}));
-      const ids = aps.map(a => a.id);
+      const all = D.apartments.filter(a => a.host_id === S.profile.id).map(a => ({...a, complex:D.complexes.find(c => c.id === a.complex_id), secret:D.secrets[a.id] || {}}));
+      const ids = all.map(a => a.id), aps = all.filter(a => !a.deleted_at);
       return {aps, tasks:D.tasks.filter(t => ids.includes(t.apartment_id) && t.task_date >= from && t.task_date <= to && t.status !== 'cancelled').map(t => D.join(t))};
     }
-    const aps = await q(sb.from('apartments').select('*, complex:complexes(*)').eq('host_id', S.profile.id).order('created_at'));
-    if (!aps.length) return {aps, tasks:[]};
-    const ids = aps.map(a => a.id);
+    const all = await q(sb.from('apartments').select('*, complex:complexes(*)').eq('host_id', S.profile.id).order('created_at'));
+    const aps = all.filter(a => !a.deleted_at);   // removed apartments stay in the DB for history
+    if (!all.length) return {aps, tasks:[]};
+    const ids = all.map(a => a.id);
     const [secs, tasks] = await Promise.all([
       q(sb.from('apartment_secrets').select('*').in('apartment_id', ids)),
       q(sb.from('tasks').select(TASK_SEL).in('apartment_id', ids).gte('task_date', from).lte('task_date', to).neq('status','cancelled').order('task_date', {ascending:false}))
@@ -1250,7 +1255,8 @@ V.host = {
       <label class="f"><span>מנקה קבוע/ה</span><select class="inp" name="cleaner_id"><option value="">בלי, לפרסם לכל המנקים</option>${ok.map(c => `<option value="${c.id}" ${a.cleaner_id === c.id ? 'selected' : ''}>${esc(c.full_name)}</option>`).join('')}</select>
         ${ok.length ? '' : '<small class="muted" style="display:block;margin-top:4px">כדי לבחור מנקה קבוע/ה, שלחו קודם בקשה בלשונית ״מנקים״.</small>'}</label>
       <label class="f"><span>הערות למנקה (לא חובה)</span><textarea class="inp" name="notes" placeholder="למשל: מצעים נקיים בארון בחדר השינה">${esc(a.notes || '')}</textarea></label>
-      <div class="row"><button class="btn lagoon" type="submit" style="flex:1">שמירה</button><button class="btn ghost sm" type="button" data-act="closeModal" data-force="1">ביטול</button></div></form>`;
+      <div class="row"><button class="btn lagoon" type="submit" style="flex:1">שמירה</button><button class="btn ghost sm" type="button" data-act="closeModal" data-force="1">ביטול</button></div>
+      ${a.id ? `<button type="button" class="btn ghost sm" style="color:var(--red,#B42318);margin-top:10px;width:100%" data-act="aptDelete" data-id="${a.id}">הסרת דירה</button>` : ''}</form>`;
   }
 };
 
@@ -1384,7 +1390,7 @@ V.admin = {
     return `<div class="row between" style="margin-bottom:12px"><h2 style="font-size:22px;font-weight:800">דירות ומתחמים</h2><button class="btn sm lagoon" data-act="aptForm">הוספת דירה</button></div>
       ${d.complexes.map(c => { const list = d.aps.filter(a => a.complex_id === c.id); return `<section class="grp"><div class="grp-h">${esc(c.name)} ${c.is_premium ? '<span class="tag gold">פרימיום</span>' : ''}<span class="muted small">${list.length}</span></div>
         ${list.map(a => `<div class="slot" style="grid-template-columns:1fr auto auto"><div class="nm">${esc(a.name)}<small>${esc(a.address || '')}${a.host_id ? ', ' + esc(this.name(a.host_id)) : ', ללא בעל דירה'}</small></div>
-          <span class="small">${sizeName(a.size)}${a.active ? '' : ' <span class="tag red">לא פעילה</span>'}${a.ical_error ? ' <span class="tag red">שגיאת יומן</span>' : a.ical_url ? ' <span class="tag gold">Airbnb מחובר</span>' : ''}</span>
+          <span class="small">${sizeName(a.size)}${a.deleted_at ? ' <span class="tag">הוסרה</span>' : a.active ? '' : ' <span class="tag red">לא פעילה</span>'}${a.ical_error ? ' <span class="tag red">שגיאת יומן</span>' : a.ical_url ? ' <span class="tag gold">Airbnb מחובר</span>' : ''}</span>
           <button class="btn xs ghost" data-act="aptForm" data-id="${a.id}">עריכה</button></div>`).join('') || '<p class="muted small">אין דירות במתחם.</p>'}</section>`; }).join('')}
       ${d.aps.filter(a => !a.complex_id).length ? `<section class="grp"><div class="grp-h">ללא מתחם</div>${d.aps.filter(a => !a.complex_id).map(a => `<div class="slot" style="grid-template-columns:1fr auto"><div class="nm">${esc(a.name)}</div><button class="btn xs ghost" data-act="aptForm" data-id="${a.id}">עריכה</button></div>`).join('')}</section>` : ''}
       <form class="card row" style="margin-top:20px" data-submit="complex"><input class="inp" name="name" required placeholder="שם מתחם חדש" style="flex:1;min-width:160px"><label class="row small"><input type="checkbox" name="prem"> פרימיום</label><button class="btn sm ghost" type="submit">הוספת מתחם</button></form>`;
@@ -1401,7 +1407,8 @@ V.admin = {
       <label class="f"><span>קישור יומן Airbnb / Booking (iCal)</span><input class="inp" name="ical_url" type="url" dir="ltr" placeholder="https://www.airbnb.com/calendar/ical/....ics" value="${esc(a.ical_url || '')}"><small class="muted" style="display:block;margin-top:4px">ב-Airbnb: לוח שנה ← זמינות ← חיבור לוחות שנה ← ייצוא. כל צ'ק-אאוט ייצור ניקיון אוטומטית.${a.ical_synced_at ? ' סונכרן לאחרונה: ' + new Date(a.ical_synced_at).toLocaleString('he-IL') : ''}${a.ical_error ? ' שגיאה: ' + esc(a.ical_error) : ''}</small></label>
       <label class="f"><span>הנחיות כספת / מפתח</span><input class="inp" name="lockbox_notes" value="${esc(a.secret?.lockbox_notes || '')}"></label>
       <div class="row" style="margin-bottom:14px"><label class="row"><input type="checkbox" name="active" ${a.active !== false ? 'checked' : ''}> פעילה</label></div>
-      <div class="row"><button class="btn lagoon" type="submit" style="flex:1">שמירה</button><button class="btn ghost sm" type="button" data-act="closeModal" data-force="1">ביטול</button></div></form>`;
+      <div class="row"><button class="btn lagoon" type="submit" style="flex:1">שמירה</button><button class="btn ghost sm" type="button" data-act="closeModal" data-force="1">ביטול</button></div>
+      ${a.id ? `<button type="button" class="btn ghost sm" style="color:var(--red,#B42318);margin-top:10px;width:100%" data-act="aptDelete" data-id="${a.id}">הסרת דירה</button>` : ''}</form>`;
   }
 };
 
@@ -1532,6 +1539,12 @@ const ACT = {
       <p class="muted small" style="margin-bottom:12px">אם לדירה יש מנקה קבוע/ה, ההזמנה נשלחת אליו/ה לאישור. אחרת היא מתפרסמת לכל המנקים.</p>
       <button class="btn lagoon" type="submit">שליחת הזמנה</button></form>`;
     paint();
+  },
+  async aptDelete(el){
+    if (!DEMO && !confirm('להסיר את הדירה?\nהיא תוסתר מהרשימה, הסנכרון עם היומן ייעצר וניקיונות עתידיים שעוד לא בוצעו יבוטלו.\nהיסטוריית הניקיונות, התמונות והדירוגים נשמרת.')) return;
+    el.disabled = true; el.textContent = 'מסיר…';
+    await run(async () => { await api.rpc('delete_apartment', {p_apt:el.dataset.id}); S.modal = null; await refresh(true); }, 'הדירה הוסרה');
+    if (S.modal) { el.disabled = false; el.textContent = 'הסרת דירה'; }
   },
   hostApt(el){ const a = el.dataset.id ? S.data.aps.find(x => x.id === el.dataset.id) : {}; S.modal = V.host.aptForm(a); paint(); },
   hostApprove(el){

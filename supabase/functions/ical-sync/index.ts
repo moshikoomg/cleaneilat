@@ -93,7 +93,7 @@ Deno.serve(async (req) => {
   horizon.setUTCDate(horizon.getUTCDate() + 90);
   const until = horizon.toISOString().slice(0, 10);
 
-  let q = db.from("apartments").select("id,name,ical_url").not("ical_url", "is", null).eq("active", true);
+  let q = db.from("apartments").select("id,name,ical_url").not("ical_url", "is", null).eq("active", true).is("deleted_at", null);
   if (body.apartment_id) q = q.eq("id", body.apartment_id);
   if (caller.kind === "host") q = q.eq("host_id", caller.uid!);
   const { data: aps, error } = await q;
