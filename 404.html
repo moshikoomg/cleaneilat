@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CleanEilat</title>
+<script>
+// Static hosting has no server routes: short links (NFC stickers / QR) land here and are sent to the app.
+(function () {
+  var p = location.pathname, base = p.indexOf('/cleaneilat/') === 0 ? '/cleaneilat/' : '/';
+  var rest = p.slice(base.length), m;
+  if ((m = rest.match(/^t\/([A-Za-z0-9_-]{2,40})\/?$/))) location.replace(base + '?t=' + m[1]);
+  else if ((m = rest.match(/^building\/([0-9a-fA-F-]{36})\/?$/))) location.replace(base + '?b=' + m[1]);
+  else if (/^admin\/nfc-writer\/?$/.test(rest)) location.replace(base + '?view=nfc-writer');
+  else location.replace(base);
+})();
+</script>
+</head>
+<body style="font-family:system-ui,sans-serif;text-align:center;padding:40px">טוען…</body>
+</html>

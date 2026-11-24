@@ -388,7 +388,7 @@ const ST = {
   approved:   ['מוכן לאורחים','green'],
   cancelled:  ['בוטל','gray']
 };
-const payOf = t => { const a = t.apartment || {}; return +(t.price ?? t.cleaner_pay ?? (F('deposit') && S.profile?.is_verified ? a.rate_max : a.rate_base)) || 0; };
+const payOf = t => { const a = t.apartment || {}; if (a.kind === 'building') return +t.price || 0; return +(t.price ?? t.cleaner_pay ?? (F('deposit') && S.profile?.is_verified ? a.rate_max : a.rate_base)) || 0; };
 const F = k => !!(S.cfg && S.cfg['feature_' + k]);
 const chip = s => `<span class="chip ${ST[s]?.[1] || 'gray'}">${ST[s]?.[0] || esc(s)}</span>`;
 const hostState = s => ['approved'].includes(s) ? ['מוכן לאורחים','green'] : ['arrived','in_progress','submitted','needs_fix'].includes(s) ? ['בניקיון כעת','orange'] : ['ממתין','gray'];
@@ -465,6 +465,23 @@ const D = {
       if (t.status === 'approved' && t.task_date < td) t.paid_at = t.id === 'h1' ? null : t.approved_at; });
     Object.assign(this.tasks.find(t => t.id === 't7'), {offer_status:'offered', request_note:'אורחים מגיעים ב-15:00'});
     Object.assign(this.tasks.find(t => t.id === 't5'), {status:'pending', is_urgent:false});
+    this.apartments.push(
+      A('bd1', {kind:'building', host_id:null, name:'הדקל 11', address:'הדקל 11', city:'אילת', units_count:24, connection_status:'active'}),
+      A('bd2', {kind:'building', host_id:null, name:'אדמונית 4', address:'אדמונית 4', city:'אילת', units_count:16, connection_status:'pending_interest', interest_count:5}));
+    this.secrets.bd1 = {entry_code:'1100#', lockbox_notes:'קוד לדלת הכניסה הראשית'};
+    const fullB = h => ({entrance:ph('לובי כניסה', h), stairs:ph('חדר מדרגות', h + 20), floors:ph('מעלית', h + 40), bins:ph('חדר אשפה', h + 60)});
+    this.tasks.push(
+      T('tb1', {apartment_id:'bd1', task_date:addDays(td,-1), window_start:'08:00', window_end:'10:00', primary_cleaner:'c2', status:'approved', price:180, offer_status:'accepted', arrived_at:addDays(td,-1) + 'T06:05:00Z', started_at:addDays(td,-1) + 'T06:09:00Z', finished_at:addDays(td,-1) + 'T07:40:00Z', approved_at:addDays(td,-1) + 'T08:00:00Z', paid_at:addDays(td,-1) + 'T09:00:00Z', photos:fullB(190), checklist:Object.fromEntries(CHECK_B.map(([k]) => [k, true]))}),
+      T('tb2', {apartment_id:'bd1', window_start:'08:00', window_end:'10:00', primary_cleaner:'c1', price:180, offer_status:'accepted'}));
+    this.nfc = [{tag_id:'DEMO-A', building_id:'bd1', locked:false}, {tag_id:'DEMO-P', building_id:'bd2', locked:false}];
+    this.building_quotes = [
+      {id:'q1', building_id:'bd1', category:'cleaning', vendor_name:'נקי פלוס', details:'ניקיון פעמיים בשבוע: לובי, מדרגות, מעלית וחדר אשפה', price:1450, price_unit:'month', status:'selected', is_group_deal:false, created_at:addDays(td,-20) + 'T10:00:00Z'},
+      {id:'q2', building_id:'bd1', category:'elevator', vendor_name:'מעליות הדרום', details:'שירות שוטף ותיקון תקלות, כולל ביקורת שנתית', price:690, price_unit:'month', status:'open', is_group_deal:true, created_at:addDays(td,-6) + 'T10:00:00Z'},
+      {id:'q3', building_id:'bd2', category:'gardening', vendor_name:'גינת אילת', details:'גיזום והשקיה בכניסה, פעם בשבועיים', price:380, price_unit:'month', status:'open', is_group_deal:true, created_at:addDays(td,-3) + 'T10:00:00Z'}];
+    this.building_receipts = [
+      {id:'r1', building_id:'bd1', title:'ניקיון חודש אוקטובר', vendor_name:'נקי פלוס', amount:1450, receipt_date:addDays(td,-24), file_path:ph('קבלה', 40), created_at:addDays(td,-24) + 'T10:00:00Z'},
+      {id:'r2', building_id:'bd1', title:'החלפת נורות בחדר המדרגות', vendor_name:'חשמל אבי', amount:240, receipt_date:addDays(td,-9), file_path:null, created_at:addDays(td,-9) + 'T10:00:00Z'}];
+    this.votes = new Set();
     this.connections = [{host_id:'h1', cleaner_id:'c1', status:'accepted'}, {host_id:'h1', cleaner_id:'c2', status:'accepted'}, {host_id:'h1', cleaner_id:'c3', status:'pending'}];
     this.wallet = [];
     this.tasks.filter(t => t.status === 'approved').forEach(t => {
@@ -485,6 +502,21 @@ const D = {
     return {task_amount:t, referral_earned:r, cap, referral_paid:paid, referral_forfeited:r - paid, total:t + paid, unlocked:t > 0};
   },
   prof(id){ return this.profiles.find(p => p.id === id); },
+  buildingPublic(t, b){
+    const id = b || this.nfc.find(x => x.tag_id === t)?.building_id, ap = this.apartments.find(x => x.id === id && x.kind === 'building' && !x.deleted_at);
+    if (!ap) return null;
+    const last = this.tasks.filter(x => x.apartment_id === ap.id && ['submitted','approved'].includes(x.status)).sort((x, y) => (y.finished_at || '').localeCompare(x.finished_at || ''))[0];
+    return JSON.parse(JSON.stringify({id:ap.id, address:ap.address, city:ap.city, units_count:ap.units_count, status:ap.connection_status, interest_count:ap.interest_count || 0,
+      last_cleaning:last ? {finished_at:last.finished_at, started_at:last.started_at, arrived_at:last.arrived_at, photos:last.photos, checklist:last.checklist, approved:last.status === 'approved'} : null,
+      receipts:this.building_receipts.filter(r => r.building_id === ap.id).sort((x, y) => y.receipt_date.localeCompare(x.receipt_date)).slice(0, 10).map(r => ({...r, file_url:r.file_path})),
+      quotes:this.building_quotes.filter(x => x.building_id === ap.id).sort((x, y) => (y.status === 'selected') - (x.status === 'selected'))}));
+  },
+  buildingVote(id, dev){
+    const ap = this.apartments.find(x => x.id === id);
+    if (ap.connection_status !== 'pending_interest') return {interest_count:ap.interest_count, counted:false};
+    const k = id + dev; if (this.votes.has(k)) return {interest_count:ap.interest_count, counted:false};
+    this.votes.add(k); ap.interest_count = (ap.interest_count || 0) + 1; return {interest_count:ap.interest_count, counted:true};
+  },
   join(t){
     if (!t) return t;
     const a = D.apartments.find(x => x.id === t.apartment_id) || {};
@@ -593,7 +625,7 @@ const D = {
 };
 
 /* ═════════════ data layer ═════════════ */
-const TASK_SEL = '*, apartment:apartments(id,name,address,size,notes,is_premium,host_id,host_price,rate_base,rate_max,complex:complexes(id,name,is_premium))';
+const TASK_SEL = '*, apartment:apartments(id,name,address,city,kind,size,notes,is_premium,host_id,host_price,rate_base,rate_max,complex:complexes(id,name,is_premium))';
 async function q(p){ const {data, error} = await p; if (error) throw new Error(error.message); return data; }
 const api = {
   async me(){
@@ -654,10 +686,10 @@ const api = {
     const from = addDays(today(), -30), to = addDays(today(), 90);
     if (DEMO) {
       const all = D.apartments.filter(a => a.host_id === S.profile.id).map(a => ({...a, complex:D.complexes.find(c => c.id === a.complex_id), secret:D.secrets[a.id] || {}}));
-      const ids = all.map(a => a.id), aps = all.filter(a => !a.deleted_at);
+      const vac = all.filter(a => a.kind !== 'building'), ids = vac.map(a => a.id), aps = vac.filter(a => !a.deleted_at);
       return {aps, tasks:D.tasks.filter(t => ids.includes(t.apartment_id) && t.task_date >= from && t.task_date <= to && t.status !== 'cancelled').map(t => D.join(t))};
     }
-    const all = await q(sb.from('apartments').select('*, complex:complexes(*)').eq('host_id', S.profile.id).order('created_at'));
+    const all = (await q(sb.from('apartments').select('*, complex:complexes(*)').eq('host_id', S.profile.id).order('created_at'))).filter(a => a.kind !== 'building');
     const aps = all.filter(a => !a.deleted_at);   // removed apartments stay in the DB for history
     if (!all.length) return {aps, tasks:[]};
     const ids = all.map(a => a.id);
@@ -692,6 +724,23 @@ const api = {
     if (DEMO) { D.secrets[aptId] = s; return; }
     return q(sb.from('apartment_secrets').upsert({apartment_id:aptId, ...s}));
   },
+  async tags(){ return DEMO ? [...D.nfc] : q(sb.from('nfc_tags').select('*')); },
+  async tagIns(row){
+    if (DEMO) { if (D.nfc.some(t => t.tag_id === row.tag_id)) throw new Error('duplicate key 23505'); D.nfc.push({...row, locked:false}); return; }
+    return q(sb.from('nfc_tags').insert(row));
+  },
+  async tagLock(id){ if (DEMO) { D.nfc.find(t => t.tag_id === id).locked = true; return; } return q(sb.from('nfc_tags').update({locked:true}).eq('tag_id', id)); },
+  async tagDel(id){ if (DEMO) { D.nfc = D.nfc.filter(t => t.tag_id !== id); return; } return q(sb.from('nfc_tags').delete().eq('tag_id', id)); },
+  async bldList(table, id){
+    if (DEMO) return D[table].filter(x => x.building_id === id).sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+    return q(sb.from(table).select('*').eq('building_id', id).order('created_at', {ascending:false}));
+  },
+  async bldIns(table, row){
+    if (DEMO) { D[table].push({id:uid(), created_at:nowIso(), status:'open', ...row}); return; }
+    return q(sb.from(table).insert(row));
+  },
+  async bldUpd(table, id, patch){ if (DEMO) { Object.assign(D[table].find(x => x.id === id), patch); return; } return q(sb.from(table).update(patch).eq('id', id)); },
+  async bldDel(table, id){ if (DEMO) { D[table] = D[table].filter(x => x.id !== id); return; } return q(sb.from(table).delete().eq('id', id)); },
   async signedUrl(bucket, path){
     if (DEMO) return null;
     const {data, error} = await sb.storage.from(bucket).createSignedUrl(path, 600);
@@ -1046,9 +1095,10 @@ V.cleaner = {
     const busy = k => S.up[t.id + k];
     const addTile = (slot, label, req) => busy(slot) ? `<div class="ph-add"><div class="spin"></div><span>מעלה…</span></div>` :
       `<label class="ph-add ${req ? 'req' : ''}">${ICON.cam}<span>${label}</span><input type="file" accept="image/*" capture="environment" data-change="photo" data-id="${t.id}" data-slot="${slot}"></label>`;
-    const checked = CHECK.filter(([k]) => dr.checks[k]).length;
-    const photosOk = SLOTS.every(([k]) => dr.photos[k]);
-    const canFinish = photosOk && checked === CHECK.length;
+    const CK = checksOf(t), SL = slotsOf(t);
+    const checked = CK.filter(([k]) => dr.checks[k]).length;
+    const photosOk = SL.every(([k]) => dr.photos[k]);
+    const canFinish = photosOk && checked === CK.length;
     return head + `
     ${st === 'needs_fix' ? `<div class="alert orange"><b>בעל הדירה ביקש תיקון:</b> ${esc(t.admin_note || '')}<br>תקנו, החליפו את התמונות הרלוונטיות ושלחו שוב.</div>` : ''}
     ${t.backup_cleaner === S.profile.id && stage < 3 ? `<div class="alert info">את/ה בכוננות גיבוי לדירה הזו. היכנס/י רק אם ביקשו ממך.</div>` : ''}
@@ -1071,15 +1121,15 @@ V.cleaner = {
           <p class="muted small" style="margin-top:6px">התחלה ב-${fmtTime(t.started_at)}${t.start_lat ? ', מיקום GPS נשמר' : ''}</p>` : ''}
       </li>
       <li class="${stage > 3 ? 'done' : stage === 3 ? 'cur' : ''}"><h3>צ׳ק-ליסט ו-4 תמונות סיום</h3>
-        ${stage === 3 ? `<div class="row between small"><span class="muted">צ׳ק-ליסט</span><b>${checked}/${CHECK.length}</b></div>
-          <div class="progress"><i style="width:${checked / CHECK.length * 100}%"></i></div>
-          <ul class="checks">${CHECK.map(([k, l]) => `<li><label><input type="checkbox" data-change="check" data-id="${t.id}" data-k="${k}" ${dr.checks[k] ? 'checked' : ''}><span>${l}</span></label></li>`).join('')}</ul>
-          <div class="ph-grid four">${SLOTS.map(([k, l]) => dr.photos[k] && !busy(k)
+        ${stage === 3 ? `<div class="row between small"><span class="muted">צ׳ק-ליסט</span><b>${checked}/${CK.length}</b></div>
+          <div class="progress"><i style="width:${checked / CK.length * 100}%"></i></div>
+          <ul class="checks">${CK.map(([k, l]) => `<li><label><input type="checkbox" data-change="check" data-id="${t.id}" data-k="${k}" ${dr.checks[k] ? 'checked' : ''}><span>${l}</span></label></li>`).join('')}</ul>
+          <div class="ph-grid four">${SL.map(([k, l]) => dr.photos[k] && !busy(k)
             ? `<div class="ph"><img data-p="${esc(dr.photos[k])}" alt="${l}" data-act="zoom"><span class="lbl">${l}</span><button class="x" data-act="rmPhoto" data-id="${t.id}" data-k="${k}" aria-label="צילום מחדש">↻</button></div>`
             : addTile(k, l, true)).join('')}</div>
           <div class="sticky-cta"><button class="btn green" data-act="finish" data-id="${t.id}" ${canFinish ? '' : 'disabled'}>סיום ושליחה לבעל הדירה</button>
-          <p class="hint">${canFinish ? 'בעל הדירה יקבל את התמונות לאישור.' : `חסרים: ${[!photosOk && `${SLOTS.filter(([k]) => !dr.photos[k]).length} תמונות`, checked < CHECK.length && `${CHECK.length - checked} סעיפים בצ׳ק-ליסט`].filter(Boolean).join(' ו-')}`}</p></div>`
-        : stage === 4 ? `<div class="ph-grid four">${SLOTS.map(([k, l]) => img(t.photos?.[k], l)).join('')}</div>
+          <p class="hint">${canFinish ? (isBld(t) ? 'התמונות יוצגו לדיירים בדף הבניין.' : 'בעל הדירה יקבל את התמונות לאישור.') : `חסרים: ${[!photosOk && `${SL.filter(([k]) => !dr.photos[k]).length} תמונות`, checked < CK.length && `${CK.length - checked} סעיפים בצ׳ק-ליסט`].filter(Boolean).join(' ו-')}`}</p></div>`
+        : stage === 4 ? `<div class="ph-grid four">${SL.map(([k, l]) => img(t.photos?.[k], l)).join('')}</div>
           <div class="alert ${st === 'approved' ? 'green' : 'info'}">${st === 'approved'
             ? `בעל הדירה אישר את הניקיון${t.rating ? ` ודירג ${'★'.repeat(t.rating)}` : ''}. ${t.paid_at ? 'הוא סימן שהתשלום הועבר.' : `התשלום (${money(payOf(t))}) מגיע ממנו ישירות.`}`
             : 'נשלח לבעל הדירה. הוא יאשר אחרי שיראה את התמונות.'}</div>` : ''}
@@ -1185,7 +1235,7 @@ V.host = {
             ${t?.damage_notes ? `<p class="small" style="margin-top:6px;color:var(--orange-ink)"><b>תועד בכניסה:</b> ${esc(t.damage_notes)}</p>` : ''}
           </div></div>
           ${sub && t.before_photos?.length ? `<p class="small muted" style="margin:12px 0 6px">לפני הניקיון</p><div class="strip">${t.before_photos.map(p => img(p)).join('')}</div>` : ''}
-          ${showPh ? `<div class="ph-grid four" style="margin-top:12px">${SLOTS.map(([k, l]) => img(t.photos?.[k], l)).join('')}</div>` : ''}
+          ${showPh ? `<div class="ph-grid four" style="margin-top:12px">${slotsOf(t).map(([k, l]) => img(t.photos?.[k], l)).join('')}</div>` : ''}
           ${sub ? `<div class="row" style="margin-top:14px;flex-wrap:nowrap"><button class="btn green" style="flex:1" data-act="hostApprove" data-id="${t.id}">אישור הניקיון</button><button class="btn orange sm" style="min-height:54px" data-act="hostFix" data-id="${t.id}">דרוש תיקון</button></div>` : ''}
           <div class="row" style="margin-top:12px;gap:8px"><button class="btn xs ghost" data-act="hostApt" data-id="${a.id}">עריכה</button>${a.ical_url ? `<button class="btn xs ghost" data-act="hostSync" data-id="${a.id}">סנכרון יומן עכשיו</button>` : ''}</div>
         </div>`; }).join('')}`;
@@ -1260,22 +1310,217 @@ V.host = {
   }
 };
 
+/* ═════════════ buildings: public page (NFC / QR, no sign-in) ═════════════ */
+const CHECK_B = [
+  ['lobby','לובי כניסה'], ['elevator','מעלית (כולל מראות ומסילות)'], ['stairs','חדר מדרגות ומעקות'],
+  ['mats','ניקיון מתחת לשטיחי כניסה'], ['bins','חדר אשפה / מבואה']
+];
+const SLOTS_B = [['entrance','לובי כניסה'], ['stairs','חדר מדרגות'], ['floors','מעלית / מבואת קומה'], ['bins','חדר אשפה']];
+const isBld = t => (t?.apartment?.kind || t?.kind) === 'building';
+const checksOf = t => isBld(t) ? CHECK_B : CHECK;
+const slotsOf = t => isBld(t) ? SLOTS_B : SLOTS;
+const QCAT = {cleaning:'ניקיון', elevator:'מעליות', gardening:'גינון', maintenance:'תחזוקה', other:'אחר'};
+const BSTAT = {active:['מחובר לניהול שקוף','green'], pending_interest:['ממתין לביקוש דיירים','orange']};
+const siteBase = () => (S.cfg?.public_base_url || (location.origin + location.pathname.replace(/index\.html$/, ''))).replace(/\/+$/, '');
+const bldLink = (b, tag) => tag ? `${siteBase()}/t/${tag}` : `${siteBase()}/building/${b}`;
+const deviceId = () => { let d = localStorage.getItem('ce_device'); if (!d) { d = crypto.randomUUID(); localStorage.setItem('ce_device', d); } return d; };
+const voted = id => { try { return !!JSON.parse(localStorage.getItem('ce_voted') || '{}')[id]; } catch { return false; } };
+const markVoted = id => { let m = {}; try { m = JSON.parse(localStorage.getItem('ce_voted') || '{}'); } catch {} m[id] = 1; localStorage.setItem('ce_voted', JSON.stringify(m)); };
+
+const pubApi = {
+  async get(t, b){
+    if (DEMO) return D.buildingPublic(t, b);
+    const r = await fetch(`${CFG.url}/functions/v1/building-public?${t ? 't=' + encodeURIComponent(t) : 'b=' + encodeURIComponent(b)}`, {headers:{apikey:CFG.key}});
+    if (r.status === 404) return null;
+    if (!r.ok) throw new Error('לא הצלחנו לטעון את פרטי הבניין. נסו לרענן.');
+    return r.json();
+  },
+  async vote(id){
+    if (DEMO) return D.buildingVote(id, deviceId());
+    const r = await fetch(`${CFG.url}/functions/v1/building-public`, {method:'POST', headers:{apikey:CFG.key, 'Content-Type':'application/json'}, body:JSON.stringify({building_id:id, device_id:deviceId()})});
+    if (!r.ok) throw new Error('לא הצלחנו לשמור. נסו שוב.');
+    return r.json();
+  }
+};
+
+V.building = {
+  async boot(){
+    S.pub = {t:qs.get('t'), b:qs.get('b'), loading:true};
+    paint();
+    try { S.pub.data = await pubApi.get(S.pub.t, S.pub.b); } catch (e) { S.pub.err = e.message; }
+    S.pub.loading = false; paint();
+    clearInterval(S.pub.poll);
+    if (S.pub.data?.status === 'pending_interest') S.pub.poll = setInterval(async () => {
+      if (document.hidden) return;
+      try { const d = await pubApi.get(S.pub.t, S.pub.b); if (d && d.interest_count !== S.pub.data.interest_count) { S.pub.data.interest_count = d.interest_count; paint(); } } catch {}
+    }, 20000);
+  },
+  html(){
+    const P = S.pub || {}, b = P.data;
+    const shell = inner => `<div class="lp" style="max-width:560px">
+      <div class="lp-top"><span class="brand"><i aria-hidden="true"></i>CleanEilat</span></div>${inner}
+      <a class="card" href="./?for=cleaner" data-act="toCleaner" style="display:block;margin-top:12px;text-align:center;text-decoration:none;color:inherit">
+        <b>המנקה או איש התחזוקה של הבניין?</b><br><span class="muted">לחצו כאן לדיווח הגעה וחיבור חינם</span></a>
+      <footer class="lp-foot"><a href="terms.html">תנאי שימוש</a> · <a href="privacy.html">מדיניות פרטיות</a></footer></div>`;
+    if (P.loading) return shell(`<section class="card" style="text-align:center;padding:40px 20px"><div class="spin" style="margin:0 auto"></div><p class="muted" style="margin-top:12px">טוען את פרטי הבניין…</p></section>`);
+    if (P.err) return shell(`<section class="card empty"><h3>משהו השתבש</h3><p>${esc(P.err)}</p></section>`);
+    if (!b) return shell(`<section class="card empty"><h3>המדבקה הזו עוד לא משויכת לבניין</h3><p>אם זו מדבקה חדשה, מנהל המערכת צריך לשייך אותה.</p></section>`);
+    const [sl, sc] = BSTAT[b.status] || BSTAT.active;
+    const head = `<section class="card hero-card">
+      <span class="tag ${sc === 'green' ? 'gold' : ''}">${sl}</span>
+      <h1 style="margin-top:12px;font-size:28px">${esc(b.address)}${b.city ? `, ${esc(b.city)}` : ''}</h1>
+      <p class="lead" style="margin-top:6px">זה לא משטרה, זה שקיפות — להאיר איפה שחשוך.</p></section>`;
+    const quotes = b.quotes?.length ? `<section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.coins} הצעות מחיר לבניין</h3><span class="tag">${b.quotes.length}</span></div>
+      <ul class="rows">${b.quotes.map(q => `<li class="rowi" style="align-items:flex-start"><span class="ic ${q.status === 'selected' ? 'lime' : ''}">${q.status === 'selected' ? ICON.check : ICON.list}</span>
+        <span class="mid"><b>${esc(q.vendor_name)} · ${QCAT[q.category] || ''}</b><span>${money(q.price)}${q.price_unit === 'month' ? ' לחודש' : ' חד-פעמי'}${q.status === 'selected' ? ' · נבחרה' : ''}</span>
+        ${q.is_group_deal ? '<span><span class="tag gold" style="margin-top:4px">הצעה קבוצתית מוזלת דרך Sponja</span></span>' : ''}
+        ${q.details ? `<span style="white-space:normal">${esc(q.details)}</span>` : ''}</span></li>`).join('')}</ul></section>` : '';
+    if (b.status === 'pending_interest') {
+      const me = voted(b.id), n = b.interest_count || 0, of = b.units_count;
+      const share = `היי שכנים, סרקתי את המדבקה בכניסה — יש פה מערכת שמראה מתי מנקים את הבניין, קבלות והצעות מחיר מספקים בשקיפות מלאה (והקמת ועד דיגיטלי חינם). כבר ${n} מאיתנו בבניין סימנו שאנחנו בעניין. כנסו לסמן גם: ${P.t ? bldLink(b.id, P.t) : bldLink(b.id)}`;
+      return shell(head + `<section class="card lime" style="margin-top:12px">
+        <span class="lbl-s" style="color:rgba(31,59,23,.7)">הבניין שלך עדיין לא מחובר לניהול וניקיון שקוף</span>
+        <div class="big num" style="margin:8px 0 2px">${n}<small>${of ? ` / ${of}` : ''}</small></div>
+        <p style="font-weight:600">${n === 1 ? 'שכן אחד כבר סימן עניין' : `שכנים כבר סימנו עניין`}${of ? ` מתוך ${of} דירות` : ''}</p>
+        ${of ? `<div class="progress" style="background:#fff;margin-top:10px" aria-hidden="true"><i style="width:${Math.min(100, n / of * 100)}%"></i></div>` : ''}
+        <div style="margin-top:16px">${me
+          ? `<p style="font-weight:600;margin-bottom:10px">${ICON.check.replace('<svg','<svg width="18" height="18"')} הקול שלך נספר. עכשיו נשאר להביא עוד שכנים:</p>
+             <a class="btn" href="https://wa.me/?text=${encodeURIComponent(share)}" target="_blank" rel="noopener">שיתוף בקבוצת הוואטסאפ של הבניין</a>`
+          : `<button class="btn" data-act="bldVote" data-id="${b.id}" ${P.voting ? 'disabled' : ''}>${P.voting ? 'שומר…' : 'אני בעניין — תוסיפו את הקול שלי לבניין'}</button>`}</div>
+      </section>
+      <section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.eye} מה יהיה כאן כשהבניין יתחבר</h3></div><ul class="perks" style="margin:0">
+        <li>תאריך ושעה של כל ניקיון, עם תמונות וצ׳ק-ליסט.</li><li>הקבלות של הבניין, במקום אחד.</li><li>הצעות מחיר מספקים שונים, שכל הדיירים רואים.</li></ul></section>` + quotes);
+    }
+    const lc = b.last_cleaning;
+    const when = lc ? (lc.finished_at || lc.started_at) : null;
+    const done = lc?.checklist ? CHECK_B.filter(([k]) => lc.checklist[k]) : [];
+    const cleaning = lc ? `<section class="card" style="margin-top:12px">
+        <div class="card-h"><h3>${ICON.broom} הניקיון האחרון</h3>${lc.approved ? '<span class="chip green">אושר</span>' : ''}</div>
+        <div class="big num" style="font-size:26px">${fmtShort(new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Jerusalem'}).format(new Date(when)))}, ${fmtTime(when)}</div>
+        ${lc.arrived_at && lc.finished_at ? `<p class="muted">הגעה ${fmtTime(lc.arrived_at)}, סיום ${fmtTime(lc.finished_at)}</p>` : ''}
+        <div class="ph-grid four" style="margin-top:12px">${SLOTS_B.map(([k, l]) => lc.photos?.[k] ? `<div class="ph"><img src="${esc(lc.photos[k])}" alt="${l}" data-act="zoom" loading="lazy"><span class="lbl">${l}</span></div>` : `<div class="ph"><div class="empty" style="padding:30px 6px">${l}</div></div>`).join('')}</div>
+        ${done.length ? `<ul class="perks" style="margin:14px 0 0">${done.map(([, l]) => `<li>${l}</li>`).join('')}</ul>` : ''}
+      </section>` : `<section class="card empty" style="margin-top:12px"><h3>עוד לא תועד ניקיון</h3><p>הניקיון הראשון שיתועד יופיע כאן עם תמונות.</p></section>`;
+    const receipts = `<section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.wallet} קבלות אחרונות</h3></div>
+      ${b.receipts?.length ? `<ul class="rows">${b.receipts.map(r => `<li class="rowi"><span class="ic">${ICON.list}</span><span class="mid"><b>${esc(r.title)}</b><span>${fmtShort(r.receipt_date)}${r.vendor_name ? ` · ${esc(r.vendor_name)}` : ''}</span></span>
+        <span class="end" style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">${r.amount != null ? `<b class="num">${money(r.amount)}</b>` : ''}${r.file_url ? `<a class="btn xs ghost" href="${esc(r.file_url)}" target="_blank" rel="noopener">צפייה</a>` : ''}</span></li>`).join('')}</ul>` : '<p class="muted">עוד לא הועלו קבלות.</p>'}</section>`;
+    return shell(head + cleaning + receipts + quotes);
+  }
+};
+
+/* ═════════════ buildings: NFC writer (admin, Chrome on Android) ═════════════ */
+const NFC = {running:false, ctrl:null, busy:false, last:null, n:1, log:[]};
+const beep = () => { try { const a = new (window.AudioContext || window.webkitAudioContext)(), o = a.createOscillator(), g = a.createGain(); o.frequency.value = 880; o.connect(g); g.connect(a.destination); g.gain.value = .15; o.start(); o.stop(a.currentTime + .18); } catch {} navigator.vibrate?.(180); };
+const nfcStatus = (msg, kind = '') => { const el = document.getElementById('nfcStatus'); if (el) { el.className = 'alert ' + (kind || 'info'); el.innerHTML = msg; } };
+async function nfcWrite(serial){
+  if (!NFC.running || NFC.busy || Date.now() < (NFC.until || 0) || (serial && serial === NFC.last)) return;
+  NFC.busy = true;
+  const num = String(NFC.n).padStart(2, '0'), id = `${NFC.prefix}-${num}`, url = `${NFC.base}/t/${id}`;
+  NFC.msg = `צורב ${id}…`; NFC.kind = 'info'; paint();
+  let reserved = false, written = false;
+  try {
+    await api.tagIns({tag_id:id, building_id:NFC.bid}); reserved = true;
+    if (NFC.reader) await NFC.reader.write({records:[{recordType:'url', data:url}]}, {signal:NFC.ctrl.signal});
+    written = true;
+    if (NFC.lock) { if (NFC.reader) await NFC.reader.makeReadOnly({signal:NFC.ctrl.signal}); await api.tagLock(id); }
+    NFC.last = serial; NFC.until = Date.now() + 2500; NFC.log.unshift({id, url, locked:NFC.lock}); NFC.n++;
+    (S.data.tags ??= []).push({tag_id:id, building_id:NFC.bid, locked:NFC.lock});
+    beep(); NFC.msg = `<b>נצרב בהצלחה #${num}</b> — קרבו את המדבקה הבאה`; NFC.kind = 'green';
+  } catch (e) {
+    const dup = /duplicate|23505|already exists/i.test(e.message || '');
+    if (reserved && !written) { try { await api.tagDel(id); } catch {} }
+    if (dup) { NFC.ctrl?.abort(); NFC.running = false; S.nfcStart = NFC.n; NFC.msg = `המזהה <b dir="ltr">${esc(id)}</b> כבר קיים. שנו את המספר ההתחלתי או את התחילית.`; }
+    else if (written) { NFC.last = serial; NFC.until = Date.now() + 2500; NFC.log.unshift({id, url, locked:false}); NFC.n++; NFC.msg = `#${num} נצרבה, אבל הנעילה נכשלה. אפשר להמשיך למדבקה הבאה.`; }
+    else NFC.msg = 'הצריבה נכשלה: ' + esc(e.message || String(e)) + '. קרבו את המדבקה שוב.';
+    NFC.kind = 'red';
+  } finally { NFC.busy = false; paint(); }
+}
+const nfcLog = () => { const el = document.getElementById('nfcLog'); if (el) el.innerHTML = NFC.log.map(x => `<li class="rowi"><span class="ic lime">${ICON.check}</span><span class="mid"><b dir="ltr">${esc(x.id)}</b><span dir="ltr">${esc(x.url)}</span></span>${x.locked ? '<span class="end tag">נעול</span>' : ''}</li>`).join(''); };
+
 /* ═════════════ admin ═════════════ */
 V.admin = {
   async load(){
     S.tab.a ??= 'over';
-    const [profiles, aps, complexes, day, qa, settings, over] = await Promise.all([
-      api.profiles(), api.apartments(), api.complexes(), api.tasksOn(S.adminDate), api.qaTasks(), api.settings(), api.rpc('admin_overview')
+    const [profiles, aps, complexes, day, qa, settings, over, tags] = await Promise.all([
+      api.profiles(), api.apartments(), api.complexes(), api.tasksOn(S.adminDate), api.qaTasks(), api.settings(), api.rpc('admin_overview'), api.tags()
     ]);
-    Object.assign(S.data, {profiles, aps, complexes, day, qa, settings, over}); S.cfg = settings;
+    Object.assign(S.data, {profiles, aps, complexes, day, qa, settings, over, tags}); S.cfg = settings;
   },
   name(id){ return S.data.profiles.find(p => p.id === id)?.full_name || '—'; },
   html(){
     const d = S.data;
     const pend = d.profiles.filter(p => p.status === 'submitted').length;
     const qaN = d.qa.filter(t => t.status === 'submitted' && !t.apartment?.host_id).length;
-    const main = ({over:this.over, board:this.board, qa:this.qaView, people:this.people, apts:this.apts})[S.tab.a].call(this);
-    return topbar() + `<main class="shell wide">` + tabs([['over','סקירה','coins'], ['board','ניקיונות','cal'], ['qa','תמונות','eye', qaN || ''], ['people','משתמשים','users', pend || ''], ['apts','דירות','pool']], 'a', true) + main + `</main>`;
+    if (S.tab.a !== 'nfc' && NFC.running) { NFC.ctrl?.abort(); NFC.running = false; }
+    const main = ({over:this.over, board:this.board, qa:this.qaView, people:this.people, apts:this.apts, bld:this.bld, nfc:this.nfc})[S.tab.a].call(this);
+    return topbar() + `<main class="shell wide">` + tabs([['over','סקירה','coins'], ['board','ניקיונות','cal'], ['qa','תמונות','eye', qaN || ''], ['people','משתמשים','users', pend || ''], ['apts','דירות','pool'], ['bld','בניינים','key']], 'a', true) + main + `</main>`;
+  },
+  bld(){
+    const d = S.data, bs = d.aps.filter(a => a.kind === 'building' && !a.deleted_at);
+    return `<div class="row between" style="margin-bottom:12px"><h2 style="font-size:22px;font-weight:800">בניינים</h2>
+      <span class="row" style="gap:8px"><button class="btn sm ghost" style="background:#fff" data-act="nfcOpen">צריבת NFC</button><button class="btn sm lagoon" data-act="bldForm">בניין חדש</button></span></div>
+      ${bs.length ? bs.map(b => { const [sl, sc] = BSTAT[b.connection_status] || BSTAT.active, tc = (d.tags || []).filter(t => t.building_id === b.id).length;
+        return `<div class="card"><div class="row between" style="align-items:flex-start;flex-wrap:nowrap;gap:10px"><div><h3 style="font-size:18px;font-weight:700">${esc(b.address)}${b.city ? ', ' + esc(b.city) : ''}</h3>
+          <p class="muted small">${b.units_count ? b.units_count + ' דירות · ' : ''}${tc} מדבקות${b.connection_status === 'pending_interest' ? ` · <b>${b.interest_count || 0}</b> דיירים סימנו עניין` : ''}${b.host_id ? ' · ועד: ' + esc(this.name(b.host_id)) : ''}</p></div><span class="chip ${sc}">${sl}</span></div>
+          <div class="row" style="margin-top:12px;gap:8px;flex-wrap:wrap">
+            <a class="btn xs ghost" href="./?b=${b.id}${DEMO ? '&demo' : ''}" target="_blank" rel="noopener">דף הבניין</a>
+            <button class="btn xs ghost" data-act="bldDocs" data-id="${b.id}">הצעות מחיר וקבלות</button>
+            <button class="btn xs ghost" data-act="nfcOpen" data-id="${b.id}">צריבת מדבקות</button>
+            <button class="btn xs ghost" data-act="bldQr" data-id="${b.id}">QR</button>
+            <button class="btn xs ghost" data-act="bldForm" data-id="${b.id}">עריכה</button></div></div>`; }).join('')
+        : `<div class="card empty"><h3>עוד אין בניינים</h3><p>אפשר לפתוח כרטיס בניין גם לפני שוועד הבית נרשם, במצב ״ממתין לביקוש דיירים״.</p><button class="btn lagoon sm" data-act="bldForm">בניין חדש</button></div>`}
+      <p class="muted small" style="margin-top:10px">ניקיון לבניין מוסיפים בלשונית ״ניקיונות״ (הוספת ניקיון). המנקה מקבל/ת צ׳ק-ליסט ו-4 תמונות של בניין, והתמונות מופיעות בדף הבניין.</p>`;
+  },
+  docs(b, quotes, receipts){
+    return `<h2>${esc(b.address)}</h2><p class="muted">הצעות מחיר וקבלות. כל מה שכאן מוצג לדיירים בדף הבניין.</p>
+      <div class="sec-h"><h2>הצעות מחיר</h2><span class="muted">${quotes.length}</span></div>
+      ${quotes.length ? `<ul class="rows">${quotes.map(q => `<li class="rowi" style="align-items:flex-start"><span class="ic ${q.status === 'selected' ? 'lime' : ''}">${q.status === 'selected' ? ICON.check : ICON.list}</span>
+        <span class="mid"><b>${esc(q.vendor_name)} · ${QCAT[q.category]}</b><span>${money(q.price)}${q.price_unit === 'month' ? ' לחודש' : ' חד-פעמי'}${q.is_group_deal ? ' · הצעה קבוצתית' : ''}</span>${q.details ? `<span style="white-space:normal">${esc(q.details)}</span>` : ''}</span>
+        <span class="end" style="display:flex;flex-direction:column;gap:6px;align-items:flex-end"><button class="btn xs ${q.status === 'selected' ? 'ghost' : 'lagoon'}" data-act="quoteToggle" data-id="${q.id}" data-s="${q.status === 'selected' ? 'open' : 'selected'}">${q.status === 'selected' ? 'החזרה לפתוחה' : 'סימון כנבחרה'}</button><button class="btn xs ghost" data-act="quoteDel" data-id="${q.id}">מחיקה</button></span></li>`).join('')}</ul>` : '<p class="muted small">עוד אין הצעות.</p>'}
+      <form class="card" style="margin-top:10px;background:var(--bg)" data-submit="quote" data-b="${b.id}">
+        <div class="grid2"><label class="f"><span>תחום</span><select class="inp" name="category">${Object.entries(QCAT).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label>
+        <label class="f"><span>שם הספק</span><input class="inp" name="vendor" required maxlength="120"></label></div>
+        <div class="grid2"><label class="f"><span>מחיר (₪)</span><input class="inp" name="price" type="number" min="0" required></label>
+        <label class="f"><span>חיוב</span><select class="inp" name="unit"><option value="month">לחודש</option><option value="once">חד-פעמי</option></select></label></div>
+        <label class="f"><span>פירוט העבודה</span><textarea class="inp" name="details" maxlength="2000" placeholder="מה כלול, תדירות, אחריות"></textarea></label>
+        <ul class="checks"><li><label><input type="checkbox" name="group"><span>הצעה קבוצתית מוזלת דרך Sponja</span></label></li></ul>
+        <button class="btn sm lagoon" type="submit">הוספת הצעה</button></form>
+      <div class="sec-h"><h2>קבלות</h2><span class="muted">${receipts.length}</span></div>
+      ${receipts.length ? `<ul class="rows">${receipts.map(r => `<li class="rowi"><span class="ic">${ICON.list}</span><span class="mid"><b>${esc(r.title)}</b><span>${fmtShort(r.receipt_date)}${r.vendor_name ? ' · ' + esc(r.vendor_name) : ''}${r.amount != null ? ' · ' + money(r.amount) : ''}</span></span>
+        <span class="end row" style="gap:6px;flex-wrap:nowrap">${r.file_path ? `<button class="btn xs ghost" data-act="rcptOpen" data-p="${esc(r.file_path)}">קובץ</button>` : ''}<button class="btn xs ghost" data-act="rcptDel" data-id="${r.id}">מחיקה</button></span></li>`).join('')}</ul>` : '<p class="muted small">עוד אין קבלות.</p>'}
+      <form class="card" style="margin-top:10px;background:var(--bg)" data-submit="receipt" data-b="${b.id}">
+        <label class="f"><span>על מה הקבלה</span><input class="inp" name="title" required maxlength="160" placeholder="למשל: ניקיון חודש נובמבר"></label>
+        <div class="grid2"><label class="f"><span>ספק</span><input class="inp" name="vendor"></label><label class="f"><span>סכום (₪)</span><input class="inp" name="amount" type="number" min="0"></label></div>
+        <div class="grid2"><label class="f"><span>תאריך</span><input class="inp" name="date" type="date" value="${today()}" required></label><label class="f"><span>קובץ (תמונה או PDF)</span><input class="inp" name="file" type="file" accept="image/*,application/pdf"></label></div>
+        <button class="btn sm lagoon" type="submit">הוספת קבלה</button></form>
+      <button class="btn ghost" style="margin-top:12px" data-act="closeModal" data-force="1">סגירה</button>`;
+  },
+  nfc(){
+    const d = S.data, bs = d.aps.filter(a => a.kind === 'building' && !a.deleted_at), ok = 'NDEFReader' in window;
+    const sel = S.nfcB && bs.some(b => b.id === S.nfcB) ? S.nfcB : bs[0]?.id;
+    const tags = (d.tags || []).filter(t => t.building_id === sel).sort((a, b) => a.tag_id.localeCompare(b.tag_id, 'en', {numeric:true}));
+    const dis = NFC.running ? 'disabled' : '';
+    const prefix = NFC.running ? NFC.prefix : (S.nfcPrefix || (sel ? 'B' + sel.slice(0, 4).toUpperCase() : ''));
+    const n = NFC.running ? NFC.n : (S.nfcStart || 1);
+    return `<button class="back" data-act="tab" data-key="a" data-id="bld">› בניינים</button>
+      <h2 style="font-size:22px;font-weight:800;margin:6px 0 12px">צריבת מדבקות NFC ברצף</h2>
+      ${ok ? '' : `<div class="alert orange" style="margin-top:0">הדפדפן הזה לא תומך בצריבת NFC. צריך Chrome בטלפון אנדרואיד, עם NFC מופעל בהגדרות.${DEMO ? ' בהדגמה אפשר לנסות עם ״סימולציית נגיעה״.' : ''}</div>`}
+      ${!bs.length ? `<div class="card empty"><h3>קודם צריך בניין</h3><button class="btn lagoon sm" data-act="bldForm">בניין חדש</button></div>` : `
+      <section class="card">
+        <label class="f"><span>בניין</span><select class="inp" id="nfcB" data-change="nfcB" ${dis}>${bs.map(b => `<option value="${b.id}" ${b.id === sel ? 'selected' : ''}>${esc(b.address)}${b.city ? ', ' + esc(b.city) : ''}</option>`).join('')}</select></label>
+        <div class="grid2"><label class="f"><span>תחילית (באנגלית)</span><input class="inp" id="nfcPrefix" dir="ltr" value="${esc(prefix)}" ${dis}></label>
+        <label class="f"><span>מספר התחלתי</span><input class="inp" id="nfcStart" type="number" min="1" value="${n}" ${dis}></label></div>
+        <label class="f"><span>כתובת האתר שתיצרב</span><input class="inp" id="nfcBase" dir="ltr" value="${esc(NFC.running ? NFC.base : siteBase())}" ${dis}>
+          <small class="muted" style="display:block;margin-top:4px">הכתובת נצרבת במדבקה לתמיד. אם בעתיד תעברו לדומיין אחר, המדבקות הישנות יפסיקו לעבוד.</small></label>
+        <ul class="checks"><li><label><input type="checkbox" id="nfcLock" ${(NFC.running ? NFC.lock : S.nfcLock) ? 'checked' : ''} ${dis}><span>לנעול כל מדבקה לקריאה בלבד אחרי הצריבה (בלתי הפיך)</span></label></li></ul>
+        <p class="small muted" style="margin-bottom:12px">המדבקה הבאה: <b dir="ltr">${esc((NFC.running ? NFC.base : siteBase()) + '/t/' + prefix + '-' + String(n).padStart(2, '0'))}</b></p>
+        ${NFC.running ? `<button class="btn orange" data-act="nfcStop">עצירה</button>${DEMO && !ok ? `<button class="btn ghost" style="margin-top:8px" data-act="nfcSim">סימולציית נגיעה</button>` : ''}`
+          : `<button class="btn lagoon" data-act="nfcStart" ${ok || DEMO ? '' : 'disabled'}>התחל צריבה רציפה</button>`}
+      </section>
+      <div id="nfcStatus" class="alert ${NFC.kind || 'info'}" style="font-size:17px">${NFC.msg || 'בחרו בניין ותחילית, ולחצו ״התחל צריבה רציפה״.'}</div>
+      ${NFC.log.length ? `<section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.check} נצרבו עכשיו</h3><span class="tag">${NFC.log.length}</span></div><ul class="rows">${NFC.log.map(x => `<li class="rowi"><span class="ic lime">${ICON.check}</span><span class="mid"><b dir="ltr">${esc(x.id)}</b><span dir="ltr">${esc(x.url)}</span></span>${x.locked ? '<span class="end tag">נעולה</span>' : ''}</li>`).join('')}</ul></section>` : ''}
+      <section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.key} המדבקות של הבניין</h3><span class="tag">${tags.length}</span></div>
+        ${tags.length ? `<ul class="rows">${tags.map(t => `<li class="rowi"><span class="mid"><b dir="ltr">${esc(t.tag_id)}</b></span>${t.locked ? '<span class="end tag">נעולה</span>' : ''}</li>`).join('')}</ul>` : '<p class="muted small">עוד לא נצרבו מדבקות לבניין הזה.</p>'}</section>`}`;
   },
   over(){
     const o = S.data.over || {}, s = S.data.settings;
@@ -1305,7 +1550,7 @@ V.admin = {
     const groups = {};
     tasks.forEach(t => { const k = t.apartment?.complex?.name || 'ללא מתחם'; (groups[k] ??= []).push(t); });
     const order = Object.keys(groups).sort((a, b) => (d.complexes.find(c => c.name === a)?.sort ?? 99) - (d.complexes.find(c => c.name === b)?.sort ?? 99));
-    const missing = d.aps.filter(a => a.active && !tasks.some(t => t.apartment_id === a.id));
+    const missing = d.aps.filter(a => a.active && a.kind !== 'building' && !tasks.some(t => t.apartment_id === a.id));
     const cnt = f => tasks.filter(f).length;
     return `<div class="toolbar">
         <div class="datebox"><button data-act="day" data-n="1" aria-label="יום קודם">›</button><input type="date" value="${td}" data-change="date" aria-label="תאריך"><button data-act="day" data-n="-1" aria-label="יום הבא">‹</button></div>
@@ -1347,7 +1592,7 @@ V.admin = {
           ${t.damage_notes ? `<dt>נזקים</dt><dd style="color:var(--orange-ink)">${esc(t.damage_notes)}</dd>` : ''}</dl>
         ${t.before_photos?.length ? `<p class="small muted" style="margin-bottom:6px">לפני הניקיון</p><div class="strip">${t.before_photos.map(p => img(p)).join('')}</div>` : ''}
         <p class="small muted" style="margin:10px 0 6px">אחרי הניקיון</p>
-        <div class="ph-grid four">${SLOTS.map(([k, l]) => img(t.photos?.[k], l)).join('')}</div>
+        <div class="ph-grid four">${slotsOf(t).map(([k, l]) => img(t.photos?.[k], l)).join('')}</div>
         ${t.status === 'submitted' && !a.host_id ? `<div class="row" style="margin-top:14px;flex-wrap:nowrap"><button class="btn green" data-act="approve" data-id="${t.id}">אישור ניקיון</button><button class="btn orange sm" style="min-height:54px" data-act="fix" data-id="${t.id}">דרוש תיקון</button></div>`
           : t.status === 'submitted' ? '<p class="muted small" style="margin-top:12px">ממתין לאישור בעל הדירה.</p>' : ''}
       </article>`; };
@@ -1386,7 +1631,7 @@ V.admin = {
       </section></div>`;
   },
   apts(){
-    const d = S.data;
+    const d = {...S.data, aps:S.data.aps.filter(a => a.kind !== 'building')};
     return `<div class="row between" style="margin-bottom:12px"><h2 style="font-size:22px;font-weight:800">דירות ומתחמים</h2><button class="btn sm lagoon" data-act="aptForm">הוספת דירה</button></div>
       ${d.complexes.map(c => { const list = d.aps.filter(a => a.complex_id === c.id); return `<section class="grp"><div class="grp-h">${esc(c.name)} ${c.is_premium ? '<span class="tag gold">פרימיום</span>' : ''}<span class="muted small">${list.length}</span></div>
         ${list.map(a => `<div class="slot" style="grid-template-columns:1fr auto auto"><div class="nm">${esc(a.name)}<small>${esc(a.address || '')}${a.host_id ? ', ' + esc(this.name(a.host_id)) : ', ללא בעל דירה'}</small></div>
@@ -1514,7 +1759,9 @@ const ACT = {
     const id = el.dataset.id, dr = S.draft[id];
     el.disabled = true; el.textContent = 'שולח…';
     await run(async () => {
-      await api.rpc('finish_cleaning', {p_task:id, p_photos:dr.photos, p_checklist:Object.fromEntries(CHECK.map(([k]) => [k, !!dr.checks[k]]))});
+      const t = S.data.tasks?.find(x => x.id === id) || S.data.qa?.find(x => x.id === id);
+      const SL = slotsOf(t), photos = Object.fromEntries(SL.filter(([k]) => dr.photos[k]).map(([k]) => [k, dr.photos[k]]));
+      await api.rpc('finish_cleaning', {p_task:id, p_photos:photos, p_checklist:Object.fromEntries(checksOf(t).map(([k]) => [k, !!dr.checks[k]]))});
       delete S.draft[id]; saveDrafts(); await refresh(true);
     }, 'המשימה נשלחה לבקרת איכות');
   },
@@ -1569,15 +1816,77 @@ const ACT = {
       toast(r.errors?.length ? 'היומן לא נקרא: ' + r.errors[0].replace(/^[^:]+:\s*/, '') : r.created ? `נוספו ${r.created} ניקיונות מהיומן` : 'היומן מעודכן, אין הזמנות חדשות'); }); },
   async connReq(el){ el.disabled = true; await run(async () => { await api.rpc('request_connection', {p_cleaner:el.dataset.id}); await refresh(true); }, 'הבקשה נשלחה למנקה'); },
 
+  /* buildings */
+  async bldVote(el){
+    S.pub.voting = true; paint();
+    try { const r = await pubApi.vote(el.dataset.id); S.pub.data.interest_count = r.interest_count; markVoted(el.dataset.id); toast(r.counted ? 'הקול שלך נוסף לבניין' : 'הקול מהמכשיר הזה כבר נספר'); }
+    catch (e) { toast(e.message, 'err'); }
+    S.pub.voting = false; paint();
+  },
+  toCleaner(){ localStorage.setItem('ce_role', 'cleaner'); location.href = './?for=cleaner'; },
+  bldForm(el){
+    const b = el.dataset.id ? S.data.aps.find(a => a.id === el.dataset.id) : {}, hosts = S.data.profiles.filter(p => p.role === 'host');
+    S.modal = `<h2>${b.id ? 'עריכת בניין' : 'בניין חדש'}</h2><form data-submit="bld" data-id="${b.id || ''}">
+      <label class="f"><span>כתובת מדויקת</span><input class="inp" name="address" required value="${esc(b.address || '')}" placeholder="רחוב ומספר בית"></label>
+      <div class="grid2"><label class="f"><span>עיר</span><input class="inp" name="city" required value="${esc(b.city || 'אילת')}"></label>
+      <label class="f"><span>מספר דירות בבניין</span><input class="inp" name="units_count" type="number" min="1" max="2000" value="${b.units_count ?? ''}"></label></div>
+      <label class="f"><span>סטטוס</span><select class="inp" name="connection_status">${Object.entries(BSTAT).map(([k, [l]]) => `<option value="${k}" ${(b.connection_status || 'pending_interest') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+      <label class="f"><span>חשבון ועד הבית (לא חובה)</span><select class="inp" name="host_id"><option value="">עוד לא נרשם</option>${hosts.map(h => `<option value="${h.id}" ${b.host_id === h.id ? 'selected' : ''}>${esc(h.full_name)}</option>`).join('')}</select></label>
+      <div class="row"><button class="btn lagoon" type="submit" style="flex:1">${b.id ? 'שמירה' : 'יצירת כרטיס בניין'}</button><button class="btn ghost sm" type="button" data-act="closeModal" data-force="1">ביטול</button></div>
+      ${b.id ? `<button type="button" class="btn ghost sm" style="color:var(--red);margin-top:10px;width:100%" data-act="aptDelete" data-id="${b.id}">הסרת בניין</button>` : ''}</form>`;
+    paint();
+  },
+  async bldDocs(el){
+    const id = el?.dataset?.id || S.docsB; S.docsB = id;
+    const b = S.data.aps.find(a => a.id === id);
+    await run(async () => { const [qq, rr] = await Promise.all([api.bldList('building_quotes', id), api.bldList('building_receipts', id)]); S.modal = V.admin.docs(b, qq, rr); paint(); });
+  },
+  async quoteToggle(el){ await run(async () => { await api.bldUpd('building_quotes', el.dataset.id, {status:el.dataset.s}); await ACT.bldDocs(); }, el.dataset.s === 'selected' ? 'ההצעה סומנה כנבחרה' : 'ההצעה חזרה להיות פתוחה'); },
+  async quoteDel(el){ if (!DEMO && !confirm('למחוק את הצעת המחיר?')) return; await run(async () => { await api.bldDel('building_quotes', el.dataset.id); await ACT.bldDocs(); }, 'ההצעה נמחקה'); },
+  async rcptDel(el){ if (!DEMO && !confirm('למחוק את הקבלה?')) return; await run(async () => { await api.bldDel('building_receipts', el.dataset.id); await ACT.bldDocs(); }, 'הקבלה נמחקה'); },
+  async rcptOpen(el){ await run(async () => { const u = DEMO ? el.dataset.p : await api.signedUrl('building-docs', el.dataset.p); if (u) window.open(u, '_blank', 'noopener'); }); },
+  bldQr(el){
+    const b = S.data.aps.find(a => a.id === el.dataset.id), link = bldLink(b.id);
+    const qr = `https://api.qrserver.com/v1/create-qr-code/?size=600x600&margin=16&data=${encodeURIComponent(link)}`;
+    S.modal = `<h2>QR לבניין</h2><p class="muted">${esc(b.address)}. סריקה פותחת את דף הבניין, בלי הרשמה.</p>
+      <img src="${qr}" alt="קוד QR לדף הבניין" style="width:100%;max-width:300px;display:block;margin:14px auto;border-radius:16px;background:#fff">
+      <p class="small" dir="ltr" style="text-align:center;word-break:break-all">${esc(link)}</p>
+      <div class="row" style="margin-top:12px"><a class="btn lagoon" style="flex:1" href="${qr}" target="_blank" rel="noopener">פתיחה להדפסה</a><button class="btn ghost sm" data-act="closeModal" data-force="1">סגירה</button></div>`;
+    paint();
+  },
+  nfcOpen(el){ if (el?.dataset?.id) { S.nfcB = el.dataset.id; S.nfcPrefix = null; S.nfcStart = null; } S.tab.a = 'nfc'; scrollTo(0, 0); paint(); },
+  async nfcStart(){
+    const v = id => document.getElementById(id);
+    const bid = v('nfcB').value, prefix = v('nfcPrefix').value.trim(), start = +v('nfcStart').value, base = v('nfcBase').value.trim().replace(/\/+$/, ''), lock = v('nfcLock').checked;
+    if (!/^[A-Za-z0-9_]{1,30}$/.test(prefix)) return toast('התחילית: אותיות באנגלית, ספרות או קו תחתון', 'err');
+    if (!(start >= 1 && start < 100000)) return toast('מספר התחלתי לא תקין', 'err');
+    if (!/^https:\/\/[^\/\s]+\.[^\/\s]+/.test(base)) return toast('כתובת האתר צריכה להתחיל ב-https://', 'err');
+    Object.assign(S, {nfcB:bid, nfcPrefix:prefix, nfcStart:start, nfcLock:lock});
+    if (base !== (S.cfg?.public_base_url || '')) { try { await api.upd('settings', 1, {public_base_url:base}); S.cfg.public_base_url = base; } catch (e) { return toast(e.message, 'err'); } }
+    Object.assign(NFC, {running:true, busy:false, last:null, until:0, n:start, bid, prefix, base, lock, reader:null, ctrl:new AbortController(), msg:'קרבו את המדבקה הראשונה לגב הטלפון', kind:'info'});
+    if ('NDEFReader' in window) {
+      try {
+        NFC.reader = new NDEFReader();
+        await NFC.reader.scan({signal:NFC.ctrl.signal});
+        NFC.reader.onreading = ev => nfcWrite(ev.serialNumber || '');
+        NFC.reader.onreadingerror = () => { if (NFC.busy) return; NFC.msg = 'לא הצלחנו לקרוא את המדבקה. הרחיקו וקרבו שוב.'; NFC.kind = 'orange'; paint(); };
+      } catch (e) { NFC.running = false; NFC.msg = e.name === 'NotAllowedError' ? 'צריך לאשר לדפדפן גישה ל-NFC' : 'לא הצלחנו להפעיל NFC: ' + esc(e.message); NFC.kind = 'red'; }
+    }
+    paint();
+  },
+  nfcStop(){ NFC.ctrl?.abort(); NFC.running = false; S.nfcStart = NFC.n; NFC.msg = `הצריבה נעצרה. המדבקה הבאה תהיה #${String(NFC.n).padStart(2, '0')}.`; NFC.kind = 'info'; paint(); },
+  nfcSim(){ nfcWrite('sim-' + Date.now()); },
+
   /* admin */
   day(el){ S.adminDate = addDays(S.adminDate, -+el.dataset.n); refresh(); },
   async genDay(){
-    const d = S.data, missing = d.aps.filter(a => a.active && !d.day.some(t => t.apartment_id === a.id && t.status !== 'cancelled'));
+    const d = S.data, missing = d.aps.filter(a => a.active && a.kind !== 'building' && !d.day.some(t => t.apartment_id === a.id && t.status !== 'cancelled'));
     await run(async () => { await api.insMany('tasks', missing.map(a => ({apartment_id:a.id, task_date:S.adminDate}))); await refresh(true); }, `נוצרו ${missing.length} ניקיונות`);
   },
   addTask(){
     S.modal = `<h2>הוספת ניקיון</h2><form data-submit="task">
-      <label class="f"><span>דירה</span><select class="inp" name="apt" required>${S.data.aps.filter(a => a.active).map(a => `<option value="${a.id}">${esc(a.name)}</option>`).join('')}</select></label>
+      <label class="f"><span>דירה או בניין</span><select class="inp" name="apt" required>${S.data.aps.filter(a => a.active && !a.deleted_at).map(a => `<option value="${a.id}">${a.kind === 'building' ? 'בניין: ' : ''}${esc(a.name)}</option>`).join('')}</select></label>
+      <label class="f"><span>מחיר למנקה (₪, לא חובה)</span><input class="inp" type="number" min="0" name="price"></label>
       <div class="grid2"><label class="f"><span>מ-</span><input class="inp" type="time" name="ws" value="11:00"></label><label class="f"><span>עד</span><input class="inp" type="time" name="we" value="15:00"></label></div>
       <ul class="checks"><li><label><input type="checkbox" name="urgent"><span>דחוף</span></label></li></ul>
       <button class="btn lagoon" type="submit">הוספה ל-${fmtShort(S.adminDate)}</button></form>`;
@@ -1627,6 +1936,7 @@ const CHG = {
     S.ob[k + 'File'] = blob; S.ob[k + 'Preview'] = f.type === 'application/pdf' ? 'pdf' : URL.createObjectURL(blob); paint();
   },
   date(el){ if (el.value) { S.adminDate = el.value; refresh(); } },
+  nfcB(el){ S.nfcB = el.value; S.nfcPrefix = null; S.nfcStart = null; paint(); },
   async sub(el){ await run(async () => { await api.rpc('admin_set_sub', {p_user:el.dataset.id, p_status:el.value}); await refresh(true); }, 'המנוי עודכן'); },
   async assign(el){
     const {id, f} = el.dataset, t = S.data.day.find(x => x.id === id);
@@ -1683,8 +1993,32 @@ const SUB = {
     });
     if (S.modal) { btn.disabled = false; btn.textContent = 'שמירה'; }
   },
+  async bld(f){
+    const id = f.dataset.id, addr = f.address.value.trim();
+    const row = {kind:'building', name:addr, address:addr, city:f.city.value.trim(), units_count:+f.units_count.value || null, connection_status:f.connection_status.value, host_id:f.host_id.value || null};
+    await run(async () => { if (id) await api.upd('apartments', id, row); else await api.ins('apartments', row); S.modal = null; await refresh(true); }, id ? 'הבניין נשמר' : 'כרטיס הבניין נוצר');
+  },
+  async quote(f){
+    const b = f.dataset.b;
+    await run(async () => {
+      await api.bldIns('building_quotes', {building_id:b, category:f.category.value, vendor_name:f.vendor.value.trim(), details:f.details.value.trim() || null, price:+f.price.value, price_unit:f.unit.value, is_group_deal:f.group.checked});
+      await ACT.bldDocs();
+    }, 'ההצעה נוספה');
+  },
+  async receipt(f){
+    const b = f.dataset.b, file = f.file.files[0];
+    if (file && file.size > 15e6) return toast('הקובץ גדול מדי (עד 15MB)', 'err');
+    const btn = f.querySelector('[type=submit]'); btn.disabled = true; btn.textContent = 'מעלה…';
+    await run(async () => {
+      let path = null;
+      if (file) { const ext = file.type === 'application/pdf' ? 'pdf' : 'jpg'; path = await api.upload('building-docs', `${b}/${Date.now()}.${ext}`, file.type === 'application/pdf' ? file : await compress(file)); }
+      await api.bldIns('building_receipts', {building_id:b, title:f.title.value.trim(), vendor_name:f.vendor.value.trim() || null, amount:f.amount.value === '' ? null : +f.amount.value, receipt_date:f.date.value, file_path:path});
+      await ACT.bldDocs();
+    }, 'הקבלה נוספה');
+    if (document.contains(btn)) { btn.disabled = false; btn.textContent = 'הוספת קבלה'; }
+  },
   async task(f){
-    await run(async () => { await api.ins('tasks', {apartment_id:f.apt.value, task_date:S.adminDate, window_start:f.ws.value, window_end:f.we.value, is_urgent:f.urgent.checked}); S.modal = null; await refresh(true); }, 'הניקיון נוסף');
+    await run(async () => { await api.ins('tasks', {apartment_id:f.apt.value, task_date:S.adminDate, window_start:f.ws.value, window_end:f.we.value, is_urgent:f.urgent.checked, ...(+f.price.value > 0 ? {price:+f.price.value} : {})}); S.modal = null; await refresh(true); }, 'הניקיון נוסף');
   },
   async settings(f){
     await run(async () => { await api.upd('settings', 1, {monthly_fee:+f.monthly_fee.value, trial_days:+f.trial_days.value, updated_at:nowIso()}); await refresh(true); }, 'ההגדרות נשמרו');
@@ -1740,6 +2074,11 @@ function live(){
   }).subscribe();
 }
 async function boot(){
+  if (qs.has('t') || qs.has('b')) {
+    if (DEMO) { if (!D.tasks) D.init(); S.cfg = D.settings; }
+    S.view = V.building; return V.building.boot();
+  }
+  if (qs.get('view') === 'nfc-writer') S.tab.a = 'nfc';
   try {
     if (DEMO) { if (!D.tasks) D.init(); S.cfg = D.settings; S.profile = D.me(); return route(); }
     if (!window.supabase) { S.profile = null; route(); return toast('לא הצלחנו להתחבר לשרת. בדקו את החיבור לאינטרנט.', 'err'); }
