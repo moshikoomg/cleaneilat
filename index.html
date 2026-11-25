@@ -861,7 +861,7 @@ Object.assign(ICON, {
 
 function topbar(){
   const p = S.profile;
-  const roleName = {admin:'מנהל מערכת', cleaner:p?.is_verified ? 'מנקה מאומת/ת ★' : 'מנקה', host:p?.onboarding?.kind === 'committee' ? 'ועד בית' : 'בעל דירה', pending:'הרשמה'}[p?.role] || '';
+  const roleName = {admin:'מנהל מערכת', cleaner:p?.is_verified ? 'מנקה מאומת/ת ★' : 'מנקה', host:'ועד בית', pending:'הרשמה'}[p?.role] || '';
   return `<header class="top"><div class="top-in">
     ${p ? `<button class="who" data-act="account" aria-label="חשבון">
       <span class="av">${p.avatar_url ? `<img src="${esc(p.avatar_url)}" alt="">` : initials(p.full_name || p.email)}</span>
