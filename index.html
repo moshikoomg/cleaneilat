@@ -483,8 +483,16 @@ const D = {
       {id:'r1', building_id:'bd1', title:'ניקיון חודש אוקטובר', vendor_name:'נקי פלוס', amount:1450, receipt_date:addDays(td,-24), file_path:ph('קבלה', 40), created_at:addDays(td,-24) + 'T10:00:00Z'},
       {id:'r2', building_id:'bd1', title:'החלפת נורות בחדר המדרגות', vendor_name:'חשמל אבי', amount:240, receipt_date:addDays(td,-9), file_path:null, created_at:addDays(td,-9) + 'T10:00:00Z'}];
     this.votes = new Set();
+    for (let w = 1; w <= 6; w++) [1, 4].forEach((dow, j) => {   // past Mon/Thu building cleanings for the visit log + usual days
+      const d = new Date(td + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() - 7 * w - ((d.getUTCDay() - dow + 7) % 7)); const ds = d.toISOString().slice(0, 10);
+      if (ds >= td) return;
+      this.tasks.push(T('tbh' + w + j, {apartment_id:'bd1', task_date:ds, window_start:'08:00', window_end:'10:00', primary_cleaner:'c2', status:'approved', price:180, offer_status:'accepted',
+        arrived_at:ds + 'T06:02:00Z', started_at:ds + 'T06:05:00Z', finished_at:ds + 'T07:3' + j + ':00Z', approved_at:ds + 'T09:00:00Z', paid_at:ds + 'T10:00:00Z',
+        photos:fullB(100 + w * 10), checklist:Object.fromEntries(CHECK_B.map(([k]) => [k, true]))}));
+    });
     this.tokens = {bd1:{building_id:'bd1', resident_token:'d1'.repeat(16), supplier_token:'51'.repeat(16)}, bd2:{building_id:'bd2', resident_token:'d2'.repeat(16), supplier_token:'52'.repeat(16)}};
-    this.issues = [{id:'i1', building_id:'bd1', category:'cleaning', body:'חדר האשפה לא נוקה מאז יום ראשון', status:'open', created_at:addDays(td,-1) + 'T17:20:00Z'},
+    this.issueVotes = new Set();
+    this.issues = [{id:'i1', building_id:'bd1', category:'cleaning', body:'חדר האשפה לא נוקה מאז יום ראשון', status:'open', me_too:2, device_id:'00000000-0000-4000-8000-000000000001', created_at:addDays(td,-1) + 'T17:20:00Z'},
       {id:'i2', building_id:'bd1', category:'maintenance', body:'נורה שרופה בקומה 3', status:'handled', created_at:addDays(td,-6) + 'T09:00:00Z'}];
     this.building_receipts.forEach(r => r.source ??= 'committee');
     this.connections = [{host_id:'k1', cleaner_id:'c2', status:'accepted'}, {host_id:'h1', cleaner_id:'c1', status:'accepted'}, {host_id:'h1', cleaner_id:'c2', status:'accepted'}, {host_id:'h1', cleaner_id:'c3', status:'pending'}];
@@ -509,7 +517,13 @@ const D = {
   prof(id){ return this.profiles.find(p => p.id === id); },
   buildingReport(x){
     const tk = this.tokens[x.building_id]; if (!tk || tk.resident_token !== x.key) throw new Error('קישור הדיירים הוחלף. בקשו מהוועד את הקישור החדש.');
-    this.issues.push({id:uid(), building_id:x.building_id, category:x.category, body:x.body, status:'open', created_at:nowIso()}); return {ok:true};
+    this.issues.push({id:uid(), building_id:x.building_id, category:x.category, body:x.body, status:'open', me_too:0, device_id:x.device_id, created_at:nowIso()}); return {ok:true};
+  },
+  buildingMetoo(x){
+    const tk = this.tokens[x.building_id]; if (!tk || tk.resident_token !== x.key) throw new Error('קישור הדיירים הוחלף. בקשו מהוועד את הקישור החדש.');
+    const i = this.issues.find(z => z.id === x.issue_id && z.status === 'open'); if (!i) throw new Error('הפנייה כבר טופלה');
+    const k = i.id + x.device_id; if (i.device_id === x.device_id || this.issueVotes.has(k)) return {me_too:i.me_too, counted:false};
+    this.issueVotes.add(k); i.me_too = (i.me_too || 0) + 1; return {me_too:i.me_too, counted:true};
   },
   supplierInfo(s){ const tk = Object.values(this.tokens).find(t => t.supplier_token === s), a = tk && this.apartments.find(x => x.id === tk.building_id);
     return a && !a.deleted_at ? {building_id:a.id, address:a.address, city:a.city} : null; },
@@ -517,13 +531,21 @@ const D = {
     const f = fd.get('file'), url = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(f); });
     this.building_receipts.push({id:uid(), building_id:i.building_id, title:fd.get('title'), vendor_name:fd.get('vendor') || null, amount:fd.get('amount') === '' ? null : +fd.get('amount'), receipt_date:fd.get('date'), file_path:url, source:'supplier', created_at:nowIso()});
     return {ok:true}; },
-  buildingPublic(t, b, key){
+  buildingPublic(t, b, key, dev){
     const id = b || this.nfc.find(x => x.tag_id === t)?.building_id, ap = this.apartments.find(x => x.id === id && x.kind === 'building' && !x.deleted_at);
     if (!ap) return null;
     const last = this.tasks.filter(x => x.apartment_id === ap.id && ['submitted','approved'].includes(x.status)).sort((x, y) => (y.finished_at || '').localeCompare(x.finished_at || ''))[0];
     const ok = !!key && this.tokens[ap.id]?.resident_token === key;
     return JSON.parse(JSON.stringify({id:ap.id, address:ap.address, city:ap.city, units_count:ap.units_count, status:ap.connection_status, interest_count:ap.interest_count || 0,
       has_committee:!!ap.host_id, committee_verified:!!ap.committee_verified, verified:ok,
+      next_cleaning:(n => n ? {date:n.task_date, from:n.window_start, to:n.window_end, status:n.status} : null)(this.tasks.filter(x => x.apartment_id === ap.id && x.task_date >= today() && ['pending','arrived','in_progress'].includes(x.status) && x.primary_cleaner && ['none','accepted', undefined].includes(x.offer_status)).sort((x, y) => x.task_date.localeCompare(y.task_date))[0]),
+      visits:this.tasks.filter(x => x.apartment_id === ap.id && ['submitted','approved'].includes(x.status) && x.finished_at).sort((x, y) => y.finished_at.localeCompare(x.finished_at)).slice(0, 6)
+        .map(x => ({finished_at:x.finished_at, arrived_at:x.arrived_at, approved:x.status === 'approved', photo:x.photos?.entrance || null, checks:Object.values(x.checklist || {}).filter(Boolean).length})),
+      pattern:Object.values(this.tasks.filter(x => x.apartment_id === ap.id && ['submitted','approved'].includes(x.status) && x.finished_at && x.finished_at >= addDays(today(), -60))
+        .reduce((m, x) => { const d = new Date(x.finished_at), dow = new Date(d.getTime() + 2 * 36e5).getUTCDay(), h = (d.getUTCHours() + 2) % 24; (m[dow] ??= {dow, n:0, hs:[]}).n++; m[dow].hs.push(h); return m; }, {}))
+        .map(x => ({dow:x.dow, n:x.n, hour:Math.round(x.hs.reduce((a, z) => a + z, 0) / x.hs.length)})),
+      open_issues:ok ? this.issues.filter(i => i.building_id === ap.id && i.status === 'open').sort((x, y) => (y.me_too || 0) - (x.me_too || 0)).map(i => ({id:i.id, category:i.category, body:i.body.slice(0, 160), created_at:i.created_at, me_too:i.me_too || 0, mine:i.device_id === dev || this.issueVotes.has(i.id + dev)})) : [],
+      my_issues:ok && dev ? this.issues.filter(i => i.building_id === ap.id && i.device_id === dev).sort((x, y) => y.created_at.localeCompare(x.created_at)).slice(0, 5) : [],
       last_cleaning:last ? {finished_at:last.finished_at, started_at:last.started_at, arrived_at:last.arrived_at, photos:last.photos, checklist:last.checklist, approved:last.status === 'approved'} : null,
       receipts:ok ? this.building_receipts.filter(r => r.building_id === ap.id).sort((x, y) => y.receipt_date.localeCompare(x.receipt_date)).slice(0, 30).map(r => ({...r, file_url:r.file_path})) : [],
       quotes:ok ? this.building_quotes.filter(x => x.building_id === ap.id).sort((x, y) => (y.status === 'selected') - (x.status === 'selected')) : []}));
@@ -1172,7 +1194,7 @@ V.cleaner = {
         <ul class="rows">${reqs.map(c => `<li class="rowi"><span class="av" style="width:40px;height:40px">${initials(c.full_name)}</span><span class="mid"><b>${esc(c.full_name)}</b><span>אחרי אישור יראה/תראה את הטלפון ופרטי התשלום שלך</span></span>
           <span class="end row" style="flex-wrap:nowrap;gap:6px"><button class="btn xs green" data-act="connResp" data-id="${c.id}" data-ok="1">אישור</button><button class="btn xs ghost" data-act="connResp" data-id="${c.id}">לא עכשיו</button></span></li>`).join('')}</ul></section>` : ''}
       ${(S.data.issues || []).filter(i => i.status === 'open').length ? `<section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.list} פניות דיירים על ניקיון</h3><span class="tag gold">${S.data.issues.filter(i => i.status === 'open').length}</span></div>
-        <ul class="rows">${S.data.issues.filter(i => i.status === 'open').map(i => `<li class="rowi" style="align-items:flex-start"><span class="ic orange">${ICON.broom}</span><span class="mid"><b>${esc(i.building?.address || '')} · ${fmtShort(new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Jerusalem'}).format(new Date(i.created_at)))}</b><span style="white-space:normal;color:var(--ink)">${esc(i.body)}</span></span></li>`).join('')}</ul>
+        <ul class="rows">${S.data.issues.filter(i => i.status === 'open').map(i => `<li class="rowi" style="align-items:flex-start"><span class="ic orange">${ICON.broom}</span><span class="mid"><b>${esc(i.building?.address || '')} · ${fmtShort(new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Jerusalem'}).format(new Date(i.created_at)))}</b><span style="white-space:normal;color:var(--ink)">${esc(i.body)}</span>${i.me_too ? `<span>${i.me_too + 1} דיירים</span>` : ''}</span></li>`).join('')}</ul>
         <p class="muted small" style="margin-top:8px">הוועד רואה את הפניות האלה ומסמן כשטופלו.</p></section>` : ''}
       ${offers.map(t => this.offerCard(t)).join('')}
       <section class="card" style="margin-top:12px">
@@ -1520,9 +1542,9 @@ V.committee = {
       <button class="btn ghost" style="margin-top:12px;background:#fff" data-act="bldDocs" data-id="${b.id}">הוספה ידנית והצעות מחיר</button>`;
   },
   issuesView(){
-    const is = S.data.issues || [], open = is.filter(i => i.status === 'open'), done = is.filter(i => i.status !== 'open').slice(0, 20);
+    const is = S.data.issues || [], open = is.filter(i => i.status === 'open').sort((a, z) => (z.me_too || 0) - (a.me_too || 0)), done = is.filter(i => i.status !== 'open').slice(0, 20);
     const row = i => `<li class="rowi" style="align-items:flex-start"><span class="ic ${i.status === 'open' ? 'orange' : 'lime'}">${i.status === 'open' ? ICON.list : ICON.check}</span>
-      <span class="mid"><b>${ICAT[i.category]} · ${fmtShort(new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Jerusalem'}).format(new Date(i.created_at)))} ${fmtTime(i.created_at)}</b><span style="white-space:normal;color:var(--ink)">${esc(i.body)}</span>${i.category === 'cleaning' ? '<span>נשלח גם למנקה</span>' : ''}</span>
+      <span class="mid"><b>${ICAT[i.category]} · ${fmtShort(new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Jerusalem'}).format(new Date(i.created_at)))} ${fmtTime(i.created_at)}</b><span style="white-space:normal;color:var(--ink)">${esc(i.body)}</span>${i.me_too ? `<span style="color:var(--orange-ink);font-weight:600">${i.me_too + 1} דיירים דיווחו על זה</span>` : ''}${i.category === 'cleaning' ? '<span>נשלח גם למנקה</span>' : ''}</span>
       <span class="end">${i.status === 'open' ? `<button class="btn xs lagoon" data-act="kHandled" data-id="${i.id}">טופל</button>` : ''}</span></li>`;
     return `<h2 style="font-size:22px;font-weight:700;margin-bottom:6px">פניות מדיירים</h2>
       <p class="muted small" style="margin-bottom:12px">רק דיירים שנכנסו דרך קישור הדיירים יכולים לפתוח פנייה. הפונים לא מזוהים בשם.</p>
@@ -1565,25 +1587,36 @@ const saveKey = (id, k) => { let m = {}; try { m = JSON.parse(localStorage.getIt
 const residentLink = (id, key) => `${siteBase()}/?b=${id}&key=${key}`;
 const supplierLink = tok => `${siteBase()}/?s=${tok}`;
 const ICAT = {cleaning:'ניקיון', maintenance:'תחזוקה', other:'אחר'};
+const DOW = ['א׳','ב׳','ג׳','ד׳','ה׳','ו׳','ש׳'];
+const ilDate = iso => new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Jerusalem'}).format(new Date(iso));
+// "usually on Mon and Thu, around 09:00" — only from real past cleanings, shown when there is a clear pattern
+const usualText = pat => {
+  const days = (pat || []).filter(x => x.n >= 2).sort((a, z) => a.dow - z.dow); if (!days.length) return '';
+  const hrs = days.map(x => x.hour), h = Math.round(hrs.reduce((a, z) => a + z, 0) / hrs.length);
+  return `בדרך כלל ${days.length === 1 ? 'ביום' : 'בימים'} ${days.map(x => DOW[x.dow]).join(days.length === 2 ? ' ו' : ', ')}, בסביבות ${String(h).padStart(2, '0')}:00`;
+};
+const nextText = n => !n ? '' : n.status === 'in_progress' || n.status === 'arrived' ? 'המנקה בבניין עכשיו'
+  : `הניקיון הבא: ${n.date === today() ? 'היום' : n.date === addDays(today(), 1) ? 'מחר' : 'יום ' + DOW[new Date(n.date + 'T12:00:00Z').getUTCDay()] + ', ' + fmtShort(n.date).split(', ').pop()}${n.from ? `, <span dir="ltr">${String(n.from).slice(0, 5)}–${String(n.to || '').slice(0, 5)}</span>` : ''}`;
 
 const pubApi = {
   async get(t, b, key){
-    if (DEMO) return D.buildingPublic(t, b, key);
-    const qp = new URLSearchParams(t ? {t} : {b}); if (key) qp.set('key', key);
+    if (DEMO) return D.buildingPublic(t, b, key, deviceId());
+    const qp = new URLSearchParams(t ? {t} : {b}); if (key) qp.set('key', key); qp.set('d', deviceId());
     const r = await fetch(`${CFG.url}/functions/v1/building-public?${qp}`, {headers:{apikey:CFG.key}});
     if (r.status === 404) return null;
     if (!r.ok) throw new Error('לא הצלחנו לטעון את פרטי הבניין. נסו לרענן.');
     return r.json();
   },
   async post(body){
-    if (DEMO) return body.action === 'report' ? D.buildingReport(body) : D.buildingVote(body.building_id, body.device_id);
+    if (DEMO) return body.action === 'report' ? D.buildingReport(body) : body.action === 'metoo' ? D.buildingMetoo(body) : D.buildingVote(body.building_id, body.device_id);
     const r = await fetch(`${CFG.url}/functions/v1/building-public`, {method:'POST', headers:{apikey:CFG.key, 'Content-Type':'application/json'}, body:JSON.stringify(body)});
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j.error === 'rate limit' ? 'נשלחו יותר מדי פניות היום. נסו מחר.' : j.error === 'not verified' ? 'קישור הדיירים הוחלף. בקשו מהוועד את הקישור החדש.' : 'לא הצלחנו לשמור. נסו שוב.');
     return j;
   },
   vote(id){ return this.post({action:'vote', building_id:id, device_id:deviceId()}); },
-  report(id, key, category, body){ return this.post({action:'report', building_id:id, key, category, body, device_id:deviceId()}); }
+  report(id, key, category, body){ return this.post({action:'report', building_id:id, key, category, body, device_id:deviceId()}); },
+  metoo(id, key, issue){ return this.post({action:'metoo', building_id:id, key, issue_id:issue, device_id:deviceId()}); }
 };
 
 V.building = {
@@ -1654,6 +1687,14 @@ V.building = {
     }
     const lc = b.last_cleaning, when = lc ? (lc.finished_at || lc.started_at) : null;
     const done = lc?.checklist ? CHECK_B.filter(([k]) => lc.checklist[k]) : [];
+    const nx = nextText(b.next_cleaning), us = usualText(b.pattern);
+    const rhythm = nx || us ? `<section class="card" style="margin-top:12px;display:flex;gap:12px;align-items:center"><span class="ic ${b.next_cleaning?.status === 'in_progress' ? 'orange' : 'lime'}">${ICON.cal}</span>
+      <div>${nx ? `<b>${nx}</b>` : ''}${us ? `<p class="muted small" style="margin-top:${nx ? 2 : 0}px">${us}</p>` : ''}</div></section>` : '';
+    const older = (b.visits || []).slice(1, 6);
+    const log = older.length ? `<section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.clock} ביקורים קודמים</h3></div>
+      <ul class="rows">${older.map(v => `<li class="rowi">${v.photo ? `<img src="${esc(v.photo)}" alt="" data-act="zoom" loading="lazy" style="width:46px;height:46px;border-radius:12px;object-fit:cover;flex:none">` : `<span class="ic">${ICON.broom}</span>`}
+        <span class="mid"><b>${fmtShort(ilDate(v.finished_at))}, ${fmtTime(v.finished_at)}</b><span>${v.checks ? `${v.checks}/${CHECK_B.length} בצ׳ק-ליסט` : ''}</span></span>
+        <span class="end">${v.approved ? '<span class="chip green">אושר</span>' : '<span class="chip orange">ממתין</span>'}</span></li>`).join('')}</ul></section>` : '';
     const cleaning = lc ? `<section class="card" style="margin-top:12px">
         <div class="card-h"><h3>${ICON.broom} הניקיון האחרון</h3>${lc.approved ? '<span class="chip green">אושר</span>' : ''}</div>
         <div class="big num" style="font-size:26px">${fmtShort(new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Jerusalem'}).format(new Date(when)))}, ${fmtTime(when)}</div>
@@ -1661,7 +1702,7 @@ V.building = {
         <div class="ph-grid four" style="margin-top:12px">${SLOTS_B.map(([k, l]) => lc.photos?.[k] ? `<div class="ph"><img src="${esc(lc.photos[k])}" alt="${l}" data-act="zoom" loading="lazy"><span class="lbl">${l}</span></div>` : `<div class="ph"><div class="empty" style="padding:30px 6px">${l}</div></div>`).join('')}</div>
         ${done.length ? `<ul class="perks" style="margin:14px 0 0">${done.map(([, l]) => `<li>${l}</li>`).join('')}</ul>` : ''}
       </section>` : `<section class="card empty" style="margin-top:12px"><h3>עוד לא תועד ניקיון</h3><p>הניקיון הראשון שיתועד יופיע כאן עם תמונות.</p></section>`;
-    if (!b.verified) return shell(head + cleaning + `<section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.key} קבלות, הצעות מחיר ופניות</h3></div>
+    if (!b.verified) return shell(head + rhythm + cleaning + log + `<section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.key} קבלות, הצעות מחיר ופניות</h3></div>
       <p class="muted">${P.keyGone ? 'קישור הדיירים שהיה לך הוחלף על ידי הוועד. ' : ''}החלק הזה פתוח לדיירי הבניין בלבד. בקשו מהוועד את קישור הדיירים, הוא נשלח בקבוצת הוואטסאפ של הבניין. מספיק ללחוץ עליו פעם אחת מהטלפון.</p></section>`);
     const quotes = b.quotes.length ? `<section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.coins} הצעות מחיר לבניין</h3><span class="tag">${b.quotes.length}</span></div>
       <ul class="rows">${b.quotes.map(q => `<li class="rowi" style="align-items:flex-start"><span class="ic ${q.status === 'selected' ? 'lime' : ''}">${q.status === 'selected' ? ICON.check : ICON.list}</span>
@@ -1671,14 +1712,24 @@ V.building = {
     const receipts = `<section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.wallet} קבלות אחרונות</h3></div>
       ${b.receipts.length ? `<ul class="rows">${b.receipts.map(r => `<li class="rowi"><span class="ic">${ICON.list}</span><span class="mid"><b>${esc(r.title)}</b><span>${fmtShort(r.receipt_date)}${r.vendor_name ? ` · ${esc(r.vendor_name)}` : ''}</span></span>
         <span class="end" style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">${r.amount != null ? `<b class="num">${money(r.amount)}</b>` : ''}${r.file_url ? `<a class="btn xs ghost" href="${esc(r.file_url)}" target="_blank" rel="noopener">צפייה</a>` : ''}</span></li>`).join('')}</ul>` : '<p class="muted">עוד לא הועלו קבלות.</p>'}</section>`;
-    const report = `<section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.list} פנייה לוועד</h3></div>
+    const openIs = (b.open_issues || []), mine = (b.my_issues || []);
+    const openCard = openIs.length ? `<section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.list} כבר דווח בבניין</h3><span class="tag">${openIs.length}</span></div>
+      <p class="muted small" style="margin:-4px 0 8px">אם זה קורה גם אצלך, אין צורך לכתוב שוב. לחיצה על ״גם אצלי״ מראה לוועד שזה חשוב לעוד דיירים.</p>
+      <ul class="rows">${openIs.map(i => `<li class="rowi" style="align-items:flex-start"><span class="ic orange">${i.category === 'cleaning' ? ICON.broom : ICON.list}</span>
+        <span class="mid"><b>${ICAT[i.category]} · ${fmtShort(ilDate(i.created_at))}</b><span style="white-space:normal;color:var(--ink)">${esc(i.body)}</span>${i.me_too ? `<span>${i.me_too + 1} דיירים דיווחו</span>` : ''}</span>
+        <span class="end">${i.mine ? '<span class="tag">סימנת</span>' : `<button class="btn xs ghost" data-act="pubMetoo" data-id="${i.id}">גם אצלי</button>`}</span></li>`).join('')}</ul></section>` : '';
+    const mineCard = mine.length ? `<section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.check} הפניות שלי</h3></div>
+      <ul class="rows">${mine.map(i => `<li class="rowi"><span class="ic ${i.status === 'handled' ? 'lime' : 'orange'}">${i.status === 'handled' ? ICON.check : ICON.clock}</span>
+        <span class="mid"><b>${esc(i.body)}</b><span>${ICAT[i.category]} · ${fmtShort(ilDate(i.created_at))}</span></span>
+        <span class="end">${i.status === 'handled' ? `<span class="chip green">טופל${i.handled_at ? ' ' + fmtShort(ilDate(i.handled_at)).split(', ').pop() : ''}</span>` : '<span class="chip orange">בטיפול הוועד</span>'}</span></li>`).join('')}</ul></section>` : '';
+    const report = `<section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.list} פנייה חדשה לוועד</h3></div>
       ${P.sent ? `<div class="alert green" style="margin:0 0 12px">הפנייה נשלחה${P.sent === 'cleaning' ? ' לוועד ולמנקה' : ' לוועד'}. תודה!</div>` : ''}
       <form data-submit="pubReport">
         <div class="choices" style="margin-bottom:12px">${Object.entries(ICAT).map(([k, l]) => `<button type="button" class="choice" aria-pressed="${P.cat === k}" data-act="pubCat" data-v="${k}">${l}</button>`).join('')}</div>
         <textarea class="inp" name="body" required minlength="2" maxlength="1000" placeholder="${P.cat === 'cleaning' ? 'למשל: חדר האשפה לא נוקה השבוע' : 'מה קרה ואיפה'}"></textarea>
-        <p class="muted small" style="margin:6px 0 12px">${P.cat === 'cleaning' ? 'פנייה על ניקיון מגיעה לוועד ולמנקה של הבניין.' : 'הפנייה מגיעה לוועד.'} השם שלך לא מוצג.</p>
+        <p class="muted small" style="margin:6px 0 12px">${P.cat === 'cleaning' ? 'פנייה על ניקיון מגיעה לוועד ולמנקה של הבניין.' : 'הפנייה מגיעה לוועד.'} היא מוצגת גם לדיירים המאומתים, בלי שם.</p>
         <button class="btn lagoon" type="submit" ${P.sending ? 'disabled' : ''}>${P.sending ? 'שולח…' : 'שליחת הפנייה'}</button></form></section>`;
-    return shell(head + cleaning + report + receipts + quotes);
+    return shell(head + rhythm + cleaning + mineCard + openCard + report + log + receipts + quotes);
   }
 };
 
@@ -2145,6 +2196,10 @@ const ACT = {
 
   /* public building page */
   pubRole(el){ S.pub.role = el.dataset.v; paint(); },
+  async pubMetoo(el){ const P = S.pub; el.disabled = true;
+    try { await pubApi.metoo(P.data.id, P.key, el.dataset.id); const d = await pubApi.get(P.t, P.b || P.data.id, P.key); if (d) P.data = d; toast('תודה, הוועד יראה שזה חשוב לעוד דיירים'); }
+    catch (e) { toast(e.message, 'err'); }
+    paint(); },
   pubCat(el){ S.pub.cat = el.dataset.v; S.pub.sent = null; paint(); },
   pubClaim(el){ const b = S.pub.data;
     localStorage.setItem('ce_role', 'committee'); localStorage.setItem('ce_claim', JSON.stringify({id:b.id, address:b.address, city:b.city}));
@@ -2393,7 +2448,7 @@ const SUB = {
   async pubReport(f){
     const P = S.pub, body = f.body.value.trim(); if (body.length < 2) return toast('כתבו כמה מילים', 'err');
     P.sending = true; paint();
-    try { await pubApi.report(P.data.id, P.key, P.cat, body); P.sent = P.cat; }
+    try { await pubApi.report(P.data.id, P.key, P.cat, body); P.sent = P.cat; const d = await pubApi.get(P.t, P.b || P.data.id, P.key); if (d) P.data = d; }
     catch (e) { toast(e.message, 'err'); if (/הוחלף/.test(e.message)) { saveKey(P.data.id, null); P.data.verified = false; P.keyGone = true; } }
     P.sending = false; paint();
   },

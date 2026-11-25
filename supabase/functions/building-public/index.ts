@@ -2,6 +2,7 @@
 // GET  ?t=<tagId> | ?b=<buildingId> [&key=<residentKey>]  → building data; receipts/quotes only with a valid resident key
 // POST {action:'vote', building_id, device_id}                → "I'm interested" (one per device)
 // POST {action:'report', building_id, key, category, body, device_id} → resident report (verified residents only)
+// POST {action:'metoo', building_id, key, issue_id, device_id}         → "me too" on an open report instead of a duplicate
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
@@ -35,6 +36,12 @@ Deno.serve(async (req) => {
   if (req.method === "POST") {
     const body = await req.json().catch(() => ({}));
     if (!UUID.test(body.building_id || "") || !UUID.test(body.device_id || "")) return json({ error: "bad request" }, 400);
+    if (body.action === "metoo") {
+      if (!KEY.test(body.key || "") || !UUID.test(body.issue_id || "")) return json({ error: "not verified" }, 403);
+      const { data, error } = await db.rpc("building_metoo", { p_building: body.building_id, p_key: body.key, p_issue: body.issue_id, p_device: body.device_id });
+      if (error) return json({ error: (error.message || "").includes("not verified") ? "not verified" : "not found" }, (error.message || "").includes("not verified") ? 403 : 404);
+      return json(data);
+    }
     if (body.action === "report") {
       if (!KEY.test(body.key || "")) return json({ error: "not verified" }, 403);
       const { data, error } = await db.rpc("building_report", {
@@ -54,12 +61,12 @@ Deno.serve(async (req) => {
   }
 
   const url = new URL(req.url);
-  const t = url.searchParams.get("t"), b = url.searchParams.get("b"), key = url.searchParams.get("key");
+  const t = url.searchParams.get("t"), b = url.searchParams.get("b"), key = url.searchParams.get("key"), dev = url.searchParams.get("d");
   if (t && !TAG.test(t)) return json({ error: "bad tag" }, 400);
   if (b && !UUID.test(b)) return json({ error: "bad id" }, 400);
   if (!t && !b) return json({ error: "missing" }, 400);
 
-  const { data, error } = await db.rpc("building_public", { p_tag: t || null, p_building: b || null, p_key: key && KEY.test(key) ? key : null });
+  const { data, error } = await db.rpc("building_public", { p_tag: t || null, p_building: b || null, p_key: key && KEY.test(key) ? key : null, p_device: dev && UUID.test(dev) ? dev : null });
   if (error) return json({ error: "server" }, 500);
   if (!data) return json({ error: "not found" }, 404);
 
@@ -68,6 +75,8 @@ Deno.serve(async (req) => {
     const links = await sign("task-photos", Object.values(lc.photos) as string[]);
     lc.photos = Object.fromEntries(Object.entries(lc.photos).map(([k, p]) => [k, links[p as string] || null]));
   }
+  const vlinks = await sign("task-photos", (data.visits || []).map((v: { photo: string }) => v.photo));
+  data.visits = (data.visits || []).map((v: { photo: string }) => ({ ...v, photo: v.photo ? vlinks[v.photo] || null : null }));
   const rlinks = await sign("building-docs", data.receipts.map((r: { file_path: string }) => r.file_path));
   data.receipts = data.receipts.map((r: { file_path: string }) => ({ ...r, file_url: r.file_path ? rlinks[r.file_path] || null : null, file_path: undefined }));
   return json(data);
