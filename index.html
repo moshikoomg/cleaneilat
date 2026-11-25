@@ -483,6 +483,10 @@ const D = {
       {id:'r1', building_id:'bd1', title:'ניקיון חודש אוקטובר', vendor_name:'נקי פלוס', amount:1450, receipt_date:addDays(td,-24), file_path:ph('קבלה', 40), created_at:addDays(td,-24) + 'T10:00:00Z'},
       {id:'r2', building_id:'bd1', title:'החלפת נורות בחדר המדרגות', vendor_name:'חשמל אבי', amount:240, receipt_date:addDays(td,-9), file_path:null, created_at:addDays(td,-9) + 'T10:00:00Z'}];
     this.votes = new Set();
+    this.tokens = {bd1:{building_id:'bd1', resident_token:'d1'.repeat(16), supplier_token:'51'.repeat(16)}, bd2:{building_id:'bd2', resident_token:'d2'.repeat(16), supplier_token:'52'.repeat(16)}};
+    this.issues = [{id:'i1', building_id:'bd1', category:'cleaning', body:'חדר האשפה לא נוקה מאז יום ראשון', status:'open', created_at:addDays(td,-1) + 'T17:20:00Z'},
+      {id:'i2', building_id:'bd1', category:'maintenance', body:'נורה שרופה בקומה 3', status:'handled', created_at:addDays(td,-6) + 'T09:00:00Z'}];
+    this.building_receipts.forEach(r => r.source ??= 'committee');
     this.connections = [{host_id:'k1', cleaner_id:'c2', status:'accepted'}, {host_id:'h1', cleaner_id:'c1', status:'accepted'}, {host_id:'h1', cleaner_id:'c2', status:'accepted'}, {host_id:'h1', cleaner_id:'c3', status:'pending'}];
     this.wallet = [];
     this.tasks.filter(t => t.status === 'approved').forEach(t => {
@@ -503,14 +507,26 @@ const D = {
     return {task_amount:t, referral_earned:r, cap, referral_paid:paid, referral_forfeited:r - paid, total:t + paid, unlocked:t > 0};
   },
   prof(id){ return this.profiles.find(p => p.id === id); },
-  buildingPublic(t, b){
+  buildingReport(x){
+    const tk = this.tokens[x.building_id]; if (!tk || tk.resident_token !== x.key) throw new Error('קישור הדיירים הוחלף. בקשו מהוועד את הקישור החדש.');
+    this.issues.push({id:uid(), building_id:x.building_id, category:x.category, body:x.body, status:'open', created_at:nowIso()}); return {ok:true};
+  },
+  supplierInfo(s){ const tk = Object.values(this.tokens).find(t => t.supplier_token === s), a = tk && this.apartments.find(x => x.id === tk.building_id);
+    return a && !a.deleted_at ? {building_id:a.id, address:a.address, city:a.city} : null; },
+  async supplierAdd(fd){ const i = this.supplierInfo(fd.get('s')); if (!i) throw new Error('bad link');
+    const f = fd.get('file'), url = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(f); });
+    this.building_receipts.push({id:uid(), building_id:i.building_id, title:fd.get('title'), vendor_name:fd.get('vendor') || null, amount:fd.get('amount') === '' ? null : +fd.get('amount'), receipt_date:fd.get('date'), file_path:url, source:'supplier', created_at:nowIso()});
+    return {ok:true}; },
+  buildingPublic(t, b, key){
     const id = b || this.nfc.find(x => x.tag_id === t)?.building_id, ap = this.apartments.find(x => x.id === id && x.kind === 'building' && !x.deleted_at);
     if (!ap) return null;
     const last = this.tasks.filter(x => x.apartment_id === ap.id && ['submitted','approved'].includes(x.status)).sort((x, y) => (y.finished_at || '').localeCompare(x.finished_at || ''))[0];
+    const ok = !!key && this.tokens[ap.id]?.resident_token === key;
     return JSON.parse(JSON.stringify({id:ap.id, address:ap.address, city:ap.city, units_count:ap.units_count, status:ap.connection_status, interest_count:ap.interest_count || 0,
+      has_committee:!!ap.host_id, committee_verified:!!ap.committee_verified, verified:ok,
       last_cleaning:last ? {finished_at:last.finished_at, started_at:last.started_at, arrived_at:last.arrived_at, photos:last.photos, checklist:last.checklist, approved:last.status === 'approved'} : null,
-      receipts:this.building_receipts.filter(r => r.building_id === ap.id).sort((x, y) => y.receipt_date.localeCompare(x.receipt_date)).slice(0, 10).map(r => ({...r, file_url:r.file_path})),
-      quotes:this.building_quotes.filter(x => x.building_id === ap.id).sort((x, y) => (y.status === 'selected') - (x.status === 'selected'))}));
+      receipts:ok ? this.building_receipts.filter(r => r.building_id === ap.id).sort((x, y) => y.receipt_date.localeCompare(x.receipt_date)).slice(0, 30).map(r => ({...r, file_url:r.file_path})) : [],
+      quotes:ok ? this.building_quotes.filter(x => x.building_id === ap.id).sort((x, y) => (y.status === 'selected') - (x.status === 'selected')) : []}));
   },
   buildingVote(id, dev){
     const ap = this.apartments.find(x => x.id === id);
@@ -593,6 +609,8 @@ const D = {
       case 'claim_building': { const b = this.apartments.find(x => x.id === a.p_building);
         if (me.role !== 'host') err('צריך חשבון ועד בית כדי לחבר בניין'); if (b.host_id && b.host_id !== me.id) err('הבניין כבר מחובר לוועד אחר. כתבו לנו ונבדוק');
         Object.assign(b, {host_id:me.id, connection_status:'active'}); return b.id; }
+      case 'rotate_building_token': { const tk = this.tokens[a.p_building], v = [...crypto.getRandomValues(new Uint8Array(16))].map(x => x.toString(16).padStart(2, '0')).join('');
+        if (a.p_kind === 'resident') tk.resident_token = v; else tk.supplier_token = v; return v; }
       case 'delete_apartment': { const ap = this.apartments.find(x => x.id === a.p_apt);
         if (this.tasks.some(x => x.apartment_id === ap.id && ['arrived','in_progress','submitted','needs_fix'].includes(x.status))) err('יש ניקיון שמתבצע עכשיו בדירה. אפשר להסיר אותה אחרי שהוא יסתיים ויאושר');
         this.tasks.filter(x => x.apartment_id === ap.id && ['pending','requested'].includes(x.status)).forEach(x => x.status = 'cancelled');
@@ -733,15 +751,29 @@ const api = {
     if (DEMO) { D.secrets[aptId] = s; return; }
     return q(sb.from('apartment_secrets').upsert({apartment_id:aptId, ...s}));
   },
+  async cleanerIssues(){
+    if (DEMO) { const mine = D.apartments.filter(a => a.cleaner_id === S.profile.id).map(a => a.id);
+      return D.issues.filter(i => i.category === 'cleaning' && mine.includes(i.building_id)).map(i => ({...i, building:{address:D.apartments.find(a => a.id === i.building_id)?.address}})); }
+    return q(sb.from('building_issues').select('*, building:apartments(address)').eq('category', 'cleaning').gte('created_at', addDays(today(), -14)).order('created_at', {ascending:false}));
+  },
   async committeeData(){
     const from = addDays(today(), -60), to = addDays(today(), 90);
     if (DEMO) {
       const aps = D.apartments.filter(a => a.host_id === S.profile.id && a.kind === 'building' && !a.deleted_at), ids = aps.map(a => a.id);
-      return {aps, tasks:D.tasks.filter(t => ids.includes(t.apartment_id) && t.task_date >= from && t.task_date <= to && t.status !== 'cancelled').map(t => D.join(t))};
+      return {aps, tasks:D.tasks.filter(t => ids.includes(t.apartment_id) && t.task_date >= from && t.task_date <= to && t.status !== 'cancelled').map(t => D.join(t)),
+        tokens:{...(D.tokens[ids[0]] || {})}, issues:D.issues.filter(i => ids.includes(i.building_id)).sort((x, y) => y.created_at.localeCompare(x.created_at)),
+        receipts:D.building_receipts.filter(r => ids.includes(r.building_id)).sort((x, y) => y.receipt_date.localeCompare(x.receipt_date))};
     }
     const aps = await q(sb.from('apartments').select('*').eq('host_id', S.profile.id).eq('kind', 'building').is('deleted_at', null).order('created_at'));
-    const tasks = aps.length ? await q(sb.from('tasks').select(TASK_SEL).in('apartment_id', aps.map(a => a.id)).gte('task_date', from).lte('task_date', to).neq('status','cancelled').order('task_date', {ascending:false})) : [];
-    return {aps, tasks};
+    if (!aps.length) return {aps, tasks:[], tokens:{}, issues:[], receipts:[]};
+    const ids = aps.map(a => a.id);
+    const [tasks, tk, issues, receipts] = await Promise.all([
+      q(sb.from('tasks').select(TASK_SEL).in('apartment_id', ids).gte('task_date', from).lte('task_date', to).neq('status','cancelled').order('task_date', {ascending:false})),
+      q(sb.from('building_tokens').select('*').eq('building_id', ids[0])),
+      q(sb.from('building_issues').select('*').in('building_id', ids).order('created_at', {ascending:false}).limit(100)),
+      q(sb.from('building_receipts').select('*').in('building_id', ids).gte('receipt_date', addDays(today(), -400)).order('receipt_date', {ascending:false}))
+    ]);
+    return {aps, tasks, tokens:tk[0] || {}, issues, receipts};
   },
   async bldMonth(){
     const from = today().slice(0, 8) + '01';
@@ -749,6 +781,11 @@ const api = {
     const r = await q(sb.from('tasks').select('id, apartment:apartments!inner(kind)').eq('apartment.kind', 'building').gte('task_date', from).in('status', ['submitted','approved']));
     return r.length;
   },
+  async issueHandled(id){ if (DEMO) { Object.assign(D.issues.find(i => i.id === id), {status:'handled', handled_at:nowIso()}); return; }
+    return q(sb.from('building_issues').update({status:'handled', handled_at:nowIso()}).eq('id', id)); },
+  async signedUrls(bucket, paths){ if (!paths.length) return {};
+    const {data, error} = await sb.storage.from(bucket).createSignedUrls(paths, 600); if (error) throw error;
+    return Object.fromEntries((data || []).filter(x => x.signedUrl).map(x => [x.path, x.signedUrl])); },
   async tags(){ return DEMO ? [...D.nfc] : q(sb.from('nfc_tags').select('*')); },
   async tagIns(row){
     if (DEMO) { if (D.nfc.some(t => t.tag_id === row.tag_id)) throw new Error('duplicate key 23505'); D.nfc.push({...row, locked:false}); return; }
@@ -1011,6 +1048,7 @@ V.onboarding = {
     o.role ??= p.desired_role === 'cleaner' ? 'cleaner' : (['committee','cleaner'].includes(localStorage.getItem('ce_role')) ? localStorage.getItem('ce_role') : null);
     if (o.role === 'host') o.role = null;   // vacation-host sign-up is frozen
     o.prices ??= {...(p.prices || {})}; o.payment_info ??= p.payment_info || ''; o.bio ??= p.bio || '';
+    if (!o.pendingClaim) { try { const c = JSON.parse(localStorage.getItem('ce_claim') || 'null'); if (c?.id) { o.pendingClaim = c.id; o.role = 'committee'; Object.assign(o.answers, {address:c.address, city:c.city || 'אילת'}); } } catch {} }
     if (o.role === 'committee' && !o.found) CHG.kSearch();
   },
   html(){
@@ -1089,11 +1127,11 @@ const isOffer = t => t.offer_status === 'offered' && t.primary_cleaner === S.pro
 V.cleaner = {
   async load(){
     S.tab.c ??= 'today';
-    const [tasks, pool, earn, contacts, history, settings, me] = await Promise.all([
-      api.cleanerTasks(), api.rpc('open_pool'), api.rpc('cleaner_earnings'), api.rpc('my_contacts'), api.cleanerHistory(), api.settings(), api.me()
+    const [tasks, pool, earn, contacts, history, settings, me, issues] = await Promise.all([
+      api.cleanerTasks(), api.rpc('open_pool'), api.rpc('cleaner_earnings'), api.rpc('my_contacts'), api.cleanerHistory(), api.settings(), api.me(), api.cleanerIssues()
     ]);
     S.profile = me;
-    Object.assign(S.data, {tasks, pool, earn, contacts:contacts || [], history, settings}); S.cfg = settings;
+    Object.assign(S.data, {tasks, pool, earn, contacts:contacts || [], history, settings, issues}); S.cfg = settings;
   },
   html(){
     const d = S.data, t = S.taskId && d.tasks.find(x => x.id === S.taskId);
@@ -1133,6 +1171,9 @@ V.cleaner = {
       ${reqs.length ? `<section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.users} ועדי בית שרוצים לעבוד איתך</h3><span class="tag gold">${reqs.length}</span></div>
         <ul class="rows">${reqs.map(c => `<li class="rowi"><span class="av" style="width:40px;height:40px">${initials(c.full_name)}</span><span class="mid"><b>${esc(c.full_name)}</b><span>אחרי אישור יראה/תראה את הטלפון ופרטי התשלום שלך</span></span>
           <span class="end row" style="flex-wrap:nowrap;gap:6px"><button class="btn xs green" data-act="connResp" data-id="${c.id}" data-ok="1">אישור</button><button class="btn xs ghost" data-act="connResp" data-id="${c.id}">לא עכשיו</button></span></li>`).join('')}</ul></section>` : ''}
+      ${(S.data.issues || []).filter(i => i.status === 'open').length ? `<section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.list} פניות דיירים על ניקיון</h3><span class="tag gold">${S.data.issues.filter(i => i.status === 'open').length}</span></div>
+        <ul class="rows">${S.data.issues.filter(i => i.status === 'open').map(i => `<li class="rowi" style="align-items:flex-start"><span class="ic orange">${ICON.broom}</span><span class="mid"><b>${esc(i.building?.address || '')} · ${fmtShort(new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Jerusalem'}).format(new Date(i.created_at)))}</b><span style="white-space:normal;color:var(--ink)">${esc(i.body)}</span></span></li>`).join('')}</ul>
+        <p class="muted small" style="margin-top:8px">הוועד רואה את הפניות האלה ומסמן כשטופלו.</p></section>` : ''}
       ${offers.map(t => this.offerCard(t)).join('')}
       <section class="card" style="margin-top:12px">
         <div class="card-h"><h3>${ICON.list} היום, ${fmtShort(td)}</h3><span class="tag">${doneN}/${todays.length} הושלמו</span></div>
@@ -1385,16 +1426,19 @@ V.host = {
 V.committee = {
   async load(){
     S.tab.k ??= 'bld';
+    S.kMonth ??= today().slice(0, 7);
     const [h, contacts, dir, settings, me] = await Promise.all([api.committeeData(), api.rpc('my_contacts'), api.rpc('list_cleaners'), api.settings(), api.me()]);
     S.profile = me;
     Object.assign(S.data, h, {contacts:(contacts || []).filter(c => c.side === 'cleaner'), dir:dir || [], settings}); S.cfg = settings;
   },
   html(){
-    const d = S.data, toApprove = d.tasks.filter(t => t.status === 'submitted').length;
-    const main = ({bld:this.bld, clean:this.clean, cleaners:V.host.cleaners, acct:this.acct})[S.tab.k].call(this);
-    return topbar() + `<main class="shell">${main}</main>` + tabs([['bld','הבניין','key'], ['clean','ניקיונות','cal', toApprove || ''], ['cleaners','מנקים','users'], ['acct','חשבון','user']], 'k');
+    const d = S.data, toApprove = d.tasks.filter(t => t.status === 'submitted').length, open = (d.issues || []).filter(i => i.status === 'open').length;
+    const main = ({bld:this.bld, clean:this.clean, docs:this.docs, issues:this.issuesView, cleaners:V.host.cleaners, acct:this.acct})[S.tab.k].call(this);
+    return topbar() + `<main class="shell">${main}</main>` + tabs([['bld','הבניין','key'], ['clean','ניקיונות','cal', toApprove || ''], ['docs','קבלות','wallet'], ['issues','פניות','list', open || ''], ['acct','חשבון','user']], 'k');
   },
   last(){ return S.data.tasks.filter(t => ['submitted','approved'].includes(t.status)).sort((a, b) => (b.finished_at || '').localeCompare(a.finished_at || ''))[0]; },
+  autoAt(t){ return t.finished_at ? new Date(new Date(t.finished_at).getTime() + 48 * 36e5).toISOString() : null; },
+  autoNote(t){ const at = this.autoAt(t); return at ? `יאושר אוטומטית ב-${fmtShort(new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Jerusalem'}).format(new Date(at)))} ${fmtTime(at)}, אם לא תיפתח פנייה על ניקיון.` : ''; },
   bld(){
     const d = S.data, b = d.aps[0];
     if (!b) return `<div class="hello"><h1>הוסיפו את הבניין</h1><p>הכתובת תופיע בדף שהדיירים רואים.</p></div>
@@ -1403,41 +1447,50 @@ V.committee = {
         <div class="grid2"><label class="f"><span>עיר</span><input class="inp" name="city" value="אילת" required></label>
         <label class="f"><span>מספר דירות</span><input class="inp" name="units" type="number" min="1" max="2000"></label></div>
         <button class="btn lagoon" type="submit">הוספת הבניין</button></form>`;
-    const link = bldLink(b.id), t = this.last(), sub = t?.status === 'submitted';
-    const share = `היי שכנים, הקמנו ועד דיגיטלי לבניין: רואים מתי מנקים את הבניין, עם תמונות, וגם את הקבלות והצעות המחיר מספקים. הכול בקישור: ${link}`;
+    const tk = d.tokens || {}, t = this.last(), sub = t?.status === 'submitted';
+    const resLink = tk.resident_token ? residentLink(b.id, tk.resident_token) : '', supLink = tk.supplier_token ? supplierLink(tk.supplier_token) : '';
+    const resShare = `היי שכנים, זה הקישור לדף הבניין שלנו: רואים מתי ניקו ועם אילו תמונות, את הקבלות והצעות המחיר, ואפשר לפתוח פנייה לוועד. הקישור לדיירי הבניין בלבד, אל תעבירו הלאה: ${resLink}`;
+    const supShare = `שלום, מעכשיו את הקבלות והחשבוניות לבניין ${b.address} שולחים דרך הקישור הזה. מצלמים, ממלאים סכום וזהו, בלי הרשמה: ${supLink}`;
     const ok = d.contacts.filter(c => c.status === 'accepted');
-    const [sl, sc] = BSTAT[b.connection_status] || BSTAT.active;
+    const [sl] = BSTAT[b.connection_status] || BSTAT.active;
+    const linkCard = (title, desc, link, share, kind, shareLabel) => `<div style="padding:12px 0;border-top:1px solid var(--line, #EEF0F2)">
+        <b>${title}</b><p class="muted small" style="margin:2px 0 10px">${desc}</p>
+        <div class="row" style="gap:8px;flex-wrap:wrap">
+          <a class="btn sm lagoon" href="https://wa.me/?text=${encodeURIComponent(share)}" target="_blank" rel="noopener">${shareLabel}</a>
+          <button class="btn sm ghost" data-act="kCopy" data-v="${esc(link)}">העתקה</button>
+          <button class="btn sm ghost" data-act="kRotate" data-kind="${kind}">איפוס הקישור</button></div></div>`;
     return `<section class="card lime">
-        <span class="vbadge"><i>✓</i>${sl}</span>
+        <div class="row" style="gap:6px"><span class="vbadge"><i>✓</i>${sl}</span>${b.committee_verified ? '<span class="tag gold">✓ ועד מאומת</span>' : '<span class="tag">ועד ממתין לאימות טלפוני</span>'}</div>
         <h1 style="font-size:26px;margin:12px 0 2px">${esc(b.address)}${b.city ? ', ' + esc(b.city) : ''}</h1>
         <p class="muted">${b.units_count ? b.units_count + ' דירות · ' : ''}ועד דיגיטלי</p>
         <div class="row" style="margin-top:14px;gap:8px;flex-wrap:wrap">
-          <a class="btn sm" href="https://wa.me/?text=${encodeURIComponent(share)}" target="_blank" rel="noopener">שיתוף לדיירים בוואטסאפ</a>
-          <a class="btn sm ghost" style="background:#fff" href="./?b=${b.id}${DEMO ? '&demo' : ''}" target="_blank" rel="noopener">הדף של הדיירים</a>
-          <button class="btn sm ghost" style="background:#fff" data-act="bldQr" data-id="${b.id}">QR לכניסה</button>
-        </div>
+          <a class="btn sm ghost" style="background:#fff" href="./?b=${b.id}${DEMO ? '&demo' : ''}" target="_blank" rel="noopener">הדף הציבורי</a>
+          <button class="btn sm ghost" style="background:#fff" data-act="bldQr" data-id="${b.id}">QR לכניסה</button></div>
       </section>
-      ${b.connection_status === 'pending_interest' ? `<div class="alert orange">הבניין מוצג לדיירים כ״ממתין לביקוש״, עם כפתור הצבעה (${b.interest_count || 0} סימנו עניין). <button class="linkbtn" data-act="kActivate" data-id="${b.id}">להפעיל את הדף המלא</button></div>` : ''}
+      ${b.connection_status === 'pending_interest' ? `<div class="alert orange">הבניין מוצג לדיירים כ״ממתין לביקוש״ (${b.interest_count || 0} סימנו עניין). <button class="linkbtn" data-act="kActivate" data-id="${b.id}">להפעיל את הדף המלא</button></div>` : ''}
+      <section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.users} קישורים לשיתוף</h3></div>
+        <p class="muted small">שולחים פעם אחת, ומשם הכול מתעדכן לבד.</p>
+        ${resLink ? linkCard('קישור לדיירים', 'מי שנכנס דרכו רואה קבלות והצעות מחיר ויכול לפתוח פנייה. סריקת המדבקה בלובי בלי הקישור מראה רק את הניקיון.', resLink, resShare, 'resident', 'שליחה בקבוצת הבניין') : ''}
+        ${supLink ? linkCard('קישור לספקים', 'מנקה, מעליות, גנן: מעלים דרכו קבלות וחשבוניות, והן נכנסות למגירה בלי שתצטרכו לעשות כלום.', supLink, supShare, 'supplier', 'שליחה לספק') : ''}
+      </section>
       <section class="card" style="margin-top:12px">
-        <div class="card-h"><h3>${ICON.broom} הניקיון האחרון</h3>${t ? (sub ? '<span class="chip orange">מחכה לאישור שלך</span>' : '<span class="chip green">אושר</span>') : ''}</div>
+        <div class="card-h"><h3>${ICON.broom} הניקיון האחרון</h3>${t ? (sub ? '<span class="chip orange">ממתין</span>' : '<span class="chip green">אושר</span>') : ''}</div>
         ${t ? `<p style="font-weight:600">${fmtShort(t.task_date)}${t.finished_at ? `, סיום ${fmtTime(t.finished_at)}` : ''} · ${esc(V.host.cname(t.primary_cleaner))}</p>
           <div class="ph-grid four" style="margin-top:10px">${slotsOf(t).map(([k, l]) => img(t.photos?.[k], l)).join('')}</div>
-          ${sub ? `<div class="row" style="margin-top:14px;flex-wrap:nowrap"><button class="btn green" style="flex:1" data-act="hostApprove" data-id="${t.id}">אישור הניקיון</button><button class="btn orange sm" style="min-height:54px" data-act="hostFix" data-id="${t.id}">דרוש תיקון</button></div>` : ''}`
-          : '<p class="muted">עוד לא היה ניקיון מתועד. אחרי הניקיון הראשון, התמונות יופיעו כאן ובדף הדיירים.</p>'}
+          ${sub ? `<p class="muted small" style="margin-top:10px">${this.autoNote(t)}</p>
+            <div class="row" style="margin-top:10px;flex-wrap:nowrap"><button class="btn green sm" style="flex:1" data-act="hostApprove" data-id="${t.id}">לאשר כבר עכשיו</button><button class="btn orange sm" data-act="hostFix" data-id="${t.id}">דרוש תיקון</button></div>` : ''}`
+          : '<p class="muted">עוד לא היה ניקיון מתועד. אחרי הניקיון הראשון, התמונות יופיעו כאן ובדף הבניין.</p>'}
       </section>
       <section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.users} המנקה של הבניין</h3></div>
         ${ok.length ? `<select class="inp" data-change="kCleaner" data-id="${b.id}" aria-label="המנקה של הבניין"><option value="">עוד לא נבחר/ה</option>${ok.map(c => `<option value="${c.id}" ${b.cleaner_id === c.id ? 'selected' : ''}>${esc(c.full_name)}</option>`).join('')}</select>
-          <button class="btn sm lagoon" style="margin-top:10px" data-act="kOrder" ${b.cleaner_id ? '' : 'disabled'}>הזמנת ניקיון</button>`
+          <div class="row" style="margin-top:10px;gap:8px"><button class="btn sm lagoon" data-act="kOrder" ${b.cleaner_id ? '' : 'disabled'}>הזמנת ניקיון</button><button class="btn sm ghost" data-act="tab" data-key="k" data-id="cleaners">כל המנקים</button></div>`
           : `<p class="muted" style="margin-bottom:10px">בחרו מנקה מהרשימה ושלחו בקשה. אחרי שהמנקה מאשר/ת, אפשר להזמין ניקיונות.</p><button class="btn sm lagoon" data-act="tab" data-key="k" data-id="cleaners">לרשימת המנקים</button>`}
-      </section>
-      <section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.coins} הצעות מחיר וקבלות</h3></div>
-        <p class="muted" style="margin-bottom:10px">כל מה שמוסיפים כאן מוצג לדיירים בדף הבניין.</p>
-        <button class="btn sm ghost" data-act="bldDocs" data-id="${b.id}">ניהול הצעות מחיר וקבלות</button></section>`;
+      </section>`;
   },
   clean(){
     const d = S.data, td = today(), b = d.aps[0];
-    const up = d.tasks.filter(t => t.task_date >= td && !['approved','cancelled'].includes(t.status)).sort((a, z) => a.task_date.localeCompare(z.task_date));
-    const past = d.tasks.filter(t => ['approved','submitted'].includes(t.status)).sort((a, z) => (z.finished_at || '').localeCompare(a.finished_at || '')).slice(0, 15);
+    const up = d.tasks.filter(t => t.task_date >= td && !['approved','cancelled','submitted'].includes(t.status)).sort((a, z) => a.task_date.localeCompare(z.task_date));
+    const past = d.tasks.filter(t => ['approved','submitted'].includes(t.status)).sort((a, z) => (z.finished_at || '').localeCompare(a.finished_at || '')).slice(0, 20);
     return `<div class="row between" style="margin-bottom:12px"><h2 style="font-size:22px;font-weight:700">ניקיונות</h2><button class="btn sm lagoon" data-act="kOrder" ${b?.cleaner_id ? '' : 'disabled'}>הזמנת ניקיון</button></div>
       ${b && !b.cleaner_id ? '<div class="alert info" style="margin-top:0">כדי להזמין ניקיון, בחרו קודם מנקה לבניין בלשונית ״הבניין״.</div>' : ''}
       ${up.length ? `<div class="card"><ul class="rows">${up.map(t => { const [w, c] = V.host.who(t);
@@ -1445,20 +1498,47 @@ V.committee = {
           <span class="mid"><b>${t.task_date === td ? 'היום' : fmtShort(t.task_date)}, ${win(t)}</b><span>${esc(w)}${t.price ? ` · ${money(t.price)}` : ''}</span></span>
           <span class="end" style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">${chip(t.status)}${['pending','requested'].includes(t.status) ? `<button class="btn xs ghost" data-act="hostCancel" data-id="${t.id}">ביטול</button>` : ''}</span></li>`; }).join('')}</ul></div>`
         : '<div class="card empty"><h3>אין ניקיונות קרובים</h3><p>הזמינו ניקיון, והוא יישלח למנקה של הבניין לאישור.</p></div>'}
-      ${past.length ? `<div class="sec-h"><h2>ניקיונות שבוצעו</h2></div><div class="card"><ul class="rows">${past.map(t => `<li class="rowi"><span class="ic ${t.status === 'approved' ? 'lime' : 'orange'}">${t.status === 'approved' ? ICON.check : ICON.clock}</span>
-        <span class="mid"><b>${fmtShort(t.task_date)}${t.finished_at ? `, ${fmtTime(t.finished_at)}` : ''}</b><span>${esc(V.host.cname(t.primary_cleaner))}${t.rating ? ` · ${'★'.repeat(t.rating)}` : ''}</span></span>
+      ${past.length ? `<div class="sec-h"><h2>ניקיונות שבוצעו</h2></div><p class="muted small" style="margin:-4px 0 10px">ניקיון מאושר אוטומטית 48 שעות אחרי הסיום, אלא אם דייר פתח פנייה על ניקיון.</p>
+        <div class="card"><ul class="rows">${past.map(t => `<li class="rowi"><span class="ic ${t.status === 'approved' ? 'lime' : 'orange'}">${t.status === 'approved' ? ICON.check : ICON.clock}</span>
+        <span class="mid"><b>${fmtShort(t.task_date)}${t.finished_at ? `, ${fmtTime(t.finished_at)}` : ''}</b><span>${esc(V.host.cname(t.primary_cleaner))}${t.rating ? ` · ${'★'.repeat(t.rating)}` : ''}${t.status === 'submitted' ? ' · ממתין לאישור אוטומטי' : ''}</span></span>
         <span class="end">${t.status === 'submitted' ? `<button class="btn xs green" data-act="hostApprove" data-id="${t.id}">אישור</button>` : t.paid_at ? '<span class="chip green">שולם</span>' : t.price ? `<button class="btn xs lagoon" data-act="hostPaid" data-id="${t.id}">שילמתי ${money(t.price)}</button>` : ''}</span></li>`).join('')}</ul></div>` : ''}`;
+  },
+  docs(){
+    const d = S.data, b = d.aps[0];
+    if (!b) return this.bld();
+    const m = S.kMonth, rs = (d.receipts || []).filter(r => (r.receipt_date || '').slice(0, 7) === m);
+    const sum = rs.reduce((x, r) => x + (+r.amount || 0), 0);
+    return `<div class="row between" style="margin-bottom:12px;gap:10px"><h2 style="font-size:22px;font-weight:700">קבלות וחשבוניות</h2>
+        <input class="inp" type="month" value="${m}" max="${today().slice(0, 7)}" data-change="kMonth" aria-label="חודש" style="width:auto;min-height:42px"></div>
+      <section class="card lime"><span class="lbl-s" style="color:rgba(31,59,23,.7)">${monthName(m)}</span>
+        <div class="big num" style="margin:4px 0">${money(sum)}</div><p class="muted">${rs.length} מסמכים${rs.filter(r => r.source === 'supplier').length ? `, ${rs.filter(r => r.source === 'supplier').length} מהם הגיעו ישירות מהספקים` : ''}</p>
+        <button class="btn" style="margin-top:12px" data-act="kZip" ${rs.length ? '' : 'disabled'}>הורדת כל הקבלות של החודש</button></section>
+      <section class="card" style="margin-top:12px">${rs.length ? `<ul class="rows">${rs.map(r => `<li class="rowi"><span class="ic">${ICON.list}</span>
+          <span class="mid"><b>${esc(r.title)}</b><span>${fmtShort(r.receipt_date)}${r.vendor_name ? ' · ' + esc(r.vendor_name) : ''}${r.source === 'supplier' ? ' · מהספק' : ''}</span></span>
+          <span class="end" style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">${r.amount != null ? `<b class="num">${money(r.amount)}</b>` : ''}${r.file_path ? `<button class="btn xs ghost" data-act="rcptOpen" data-p="${esc(r.file_path)}">קובץ</button>` : ''}</span></li>`).join('')}</ul>`
+        : `<p class="muted">אין קבלות בחודש הזה. שלחו לספקים את קישור הספקים מלשונית ״הבניין״, והקבלות ייכנסו לכאן לבד.</p>`}</section>
+      <button class="btn ghost" style="margin-top:12px;background:#fff" data-act="bldDocs" data-id="${b.id}">הוספה ידנית והצעות מחיר</button>`;
+  },
+  issuesView(){
+    const is = S.data.issues || [], open = is.filter(i => i.status === 'open'), done = is.filter(i => i.status !== 'open').slice(0, 20);
+    const row = i => `<li class="rowi" style="align-items:flex-start"><span class="ic ${i.status === 'open' ? 'orange' : 'lime'}">${i.status === 'open' ? ICON.list : ICON.check}</span>
+      <span class="mid"><b>${ICAT[i.category]} · ${fmtShort(new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Jerusalem'}).format(new Date(i.created_at)))} ${fmtTime(i.created_at)}</b><span style="white-space:normal;color:var(--ink)">${esc(i.body)}</span>${i.category === 'cleaning' ? '<span>נשלח גם למנקה</span>' : ''}</span>
+      <span class="end">${i.status === 'open' ? `<button class="btn xs lagoon" data-act="kHandled" data-id="${i.id}">טופל</button>` : ''}</span></li>`;
+    return `<h2 style="font-size:22px;font-weight:700;margin-bottom:6px">פניות מדיירים</h2>
+      <p class="muted small" style="margin-bottom:12px">רק דיירים שנכנסו דרך קישור הדיירים יכולים לפתוח פנייה. הפונים לא מזוהים בשם.</p>
+      ${open.length ? `<div class="card"><ul class="rows">${open.map(row).join('')}</ul></div>` : '<div class="card empty"><h3>אין פניות פתוחות</h3><p>כשדייר יפתח פנייה מדף הבניין, היא תופיע כאן.</p></div>'}
+      ${done.length ? `<div class="sec-h"><h2>טופלו</h2></div><div class="card"><ul class="rows">${done.map(row).join('')}</ul></div>` : ''}`;
   },
   acct(){
     const p = S.profile;
     return `<section class="card lime"><span class="lbl-s" style="color:rgba(31,59,23,.7)">ועד דיגיטלי</span><div class="big num" style="margin:4px 0">חינם</div>
-        <p class="muted">הדף לדיירים, הצעות המחיר והקבלות. את המנקה משלמים ישירות, לפי מה שסיכמתם.</p></section>
+        <p class="muted">הדף לדיירים, הקבלות מהספקים והפניות. את המנקה משלמים ישירות, לפי מה שסיכמתם.</p></section>
       <form class="card" style="margin-top:12px" data-submit="hostProfile"><div class="card-h"><h3>${ICON.user} הפרטים שלי</h3></div>
         <div class="grid2"><label class="f"><span>שם מלא</span><input class="inp" name="full_name" value="${esc(p.full_name || '')}" required></label>
         <label class="f"><span>טלפון</span><input class="inp" name="phone" type="tel" dir="ltr" value="${esc(p.phone || '')}" required></label></div>
-        <p class="muted small" style="margin-bottom:12px">${esc(p.email || '')}. הטלפון מוצג רק למנקים שעובדים עם הבניין.</p>
+        <p class="muted small" style="margin-bottom:12px">${esc(p.email || '')}. דרך הטלפון הזה נאמת שאת/ה בוועד הבית.</p>
         <button class="btn sm lagoon" type="submit">שמירה</button></form>
-      <div class="row" style="margin-top:12px"><a class="btn ghost sm" style="background:#fff" href="terms.html">תנאי שימוש</a><button class="btn ghost sm" style="background:#fff" data-act="signout">יציאה מהחשבון</button></div>`;
+      <div class="row" style="margin-top:12px"><button class="btn ghost sm" style="background:#fff" data-act="tab" data-key="k" data-id="cleaners">מנקים</button><a class="btn ghost sm" style="background:#fff" href="terms.html">תנאי שימוש</a><button class="btn ghost sm" style="background:#fff" data-act="signout">יציאה מהחשבון</button></div>`;
   }
 };
 
@@ -1479,39 +1559,61 @@ const deviceId = () => { let d = localStorage.getItem('ce_device'); if (!d) { d 
 const voted = id => { try { return !!JSON.parse(localStorage.getItem('ce_voted') || '{}')[id]; } catch { return false; } };
 const markVoted = id => { let m = {}; try { m = JSON.parse(localStorage.getItem('ce_voted') || '{}'); } catch {} m[id] = 1; localStorage.setItem('ce_voted', JSON.stringify(m)); };
 
+const KEYRX = /^[0-9a-f]{32}$/i;
+const storedKey = id => { try { return JSON.parse(localStorage.getItem('ce_keys') || '{}')[id] || null; } catch { return null; } };
+const saveKey = (id, k) => { let m = {}; try { m = JSON.parse(localStorage.getItem('ce_keys') || '{}'); } catch {} if (k) m[id] = k; else delete m[id]; localStorage.setItem('ce_keys', JSON.stringify(m)); };
+const residentLink = (id, key) => `${siteBase()}/?b=${id}&key=${key}`;
+const supplierLink = tok => `${siteBase()}/?s=${tok}`;
+const ICAT = {cleaning:'ניקיון', maintenance:'תחזוקה', other:'אחר'};
+
 const pubApi = {
-  async get(t, b){
-    if (DEMO) return D.buildingPublic(t, b);
-    const r = await fetch(`${CFG.url}/functions/v1/building-public?${t ? 't=' + encodeURIComponent(t) : 'b=' + encodeURIComponent(b)}`, {headers:{apikey:CFG.key}});
+  async get(t, b, key){
+    if (DEMO) return D.buildingPublic(t, b, key);
+    const qp = new URLSearchParams(t ? {t} : {b}); if (key) qp.set('key', key);
+    const r = await fetch(`${CFG.url}/functions/v1/building-public?${qp}`, {headers:{apikey:CFG.key}});
     if (r.status === 404) return null;
     if (!r.ok) throw new Error('לא הצלחנו לטעון את פרטי הבניין. נסו לרענן.');
     return r.json();
   },
-  async vote(id){
-    if (DEMO) return D.buildingVote(id, deviceId());
-    const r = await fetch(`${CFG.url}/functions/v1/building-public`, {method:'POST', headers:{apikey:CFG.key, 'Content-Type':'application/json'}, body:JSON.stringify({building_id:id, device_id:deviceId()})});
-    if (!r.ok) throw new Error('לא הצלחנו לשמור. נסו שוב.');
-    return r.json();
-  }
+  async post(body){
+    if (DEMO) return body.action === 'report' ? D.buildingReport(body) : D.buildingVote(body.building_id, body.device_id);
+    const r = await fetch(`${CFG.url}/functions/v1/building-public`, {method:'POST', headers:{apikey:CFG.key, 'Content-Type':'application/json'}, body:JSON.stringify(body)});
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error === 'rate limit' ? 'נשלחו יותר מדי פניות היום. נסו מחר.' : j.error === 'not verified' ? 'קישור הדיירים הוחלף. בקשו מהוועד את הקישור החדש.' : 'לא הצלחנו לשמור. נסו שוב.');
+    return j;
+  },
+  vote(id){ return this.post({action:'vote', building_id:id, device_id:deviceId()}); },
+  report(id, key, category, body){ return this.post({action:'report', building_id:id, key, category, body, device_id:deviceId()}); }
 };
 
 V.building = {
   async boot(){
-    S.pub = {t:qs.get('t'), b:qs.get('b'), loading:true};
+    const urlKey = KEYRX.test(qs.get('key') || '') ? qs.get('key') : null;
+    S.pub = {t:qs.get('t'), b:qs.get('b'), loading:true, role:'resident', cat:'cleaning'};
+    if (urlKey) history.replaceState(null, '', location.pathname + location.search.replace(/[?&]key=[^&]*/, '').replace(/^&/, '?'));
     paint();
-    try { S.pub.data = await pubApi.get(S.pub.t, S.pub.b); } catch (e) { S.pub.err = e.message; }
+    try {
+      let key = urlKey || (S.pub.b ? storedKey(S.pub.b) : null);
+      let d = await pubApi.get(S.pub.t, S.pub.b, key);
+      if (d && !key && storedKey(d.id)) { key = storedKey(d.id); d = await pubApi.get(S.pub.t, S.pub.b, key); }
+      if (d) {
+        if (d.verified) { saveKey(d.id, key); S.pub.key = key; }
+        else if (key) { saveKey(d.id, null); S.pub.keyGone = true; }
+      }
+      S.pub.data = d;
+    } catch (e) { S.pub.err = e.message; }
     S.pub.loading = false; paint();
     clearInterval(S.pub.poll);
     if (S.pub.data?.status === 'pending_interest') S.pub.poll = setInterval(async () => {
       if (document.hidden) return;
-      try { const d = await pubApi.get(S.pub.t, S.pub.b); if (d && d.interest_count !== S.pub.data.interest_count) { S.pub.data.interest_count = d.interest_count; paint(); } } catch {}
+      try { const d = await pubApi.get(S.pub.t, S.pub.b, S.pub.key); if (d && d.interest_count !== S.pub.data.interest_count) { S.pub.data.interest_count = d.interest_count; paint(); } } catch {}
     }, 20000);
   },
   html(){
     const P = S.pub || {}, b = P.data;
     const shell = inner => `<div class="lp" style="max-width:560px">
       <div class="lp-top"><span class="brand"><i aria-hidden="true"></i>CleanEilat</span></div>${inner}
-      <a class="card" href="./?for=cleaner" data-act="toCleaner" style="display:block;margin-top:12px;text-align:center;text-decoration:none;color:inherit">
+      <a class="card" href="./?for=cleaner" style="display:block;margin-top:12px;text-align:center;text-decoration:none;color:inherit">
         <b>המנקה או איש התחזוקה של הבניין?</b><br><span class="muted">לחצו כאן לדיווח הגעה וחיבור חינם</span></a>
       <footer class="lp-foot"><a href="terms.html">תנאי שימוש</a> · <a href="privacy.html">מדיניות פרטיות</a></footer></div>`;
     if (P.loading) return shell(`<section class="card" style="text-align:center;padding:40px 20px"><div class="spin" style="margin:0 auto"></div><p class="muted" style="margin-top:12px">טוען את פרטי הבניין…</p></section>`);
@@ -1519,21 +1621,28 @@ V.building = {
     if (!b) return shell(`<section class="card empty"><h3>המדבקה הזו עוד לא משויכת לבניין</h3><p>אם זו מדבקה חדשה, מנהל המערכת צריך לשייך אותה.</p></section>`);
     const [sl, sc] = BSTAT[b.status] || BSTAT.active;
     const head = `<section class="card hero-card">
-      <span class="tag ${sc === 'green' ? 'gold' : ''}">${sl}</span>
+      <div class="row" style="gap:6px"><span class="tag ${sc === 'green' ? 'gold' : ''}">${sl}</span>${b.has_committee ? (b.committee_verified ? '<span class="tag gold">✓ ועד מאומת</span>' : '<span class="tag">יש ועד רשום</span>') : ''}${b.verified ? '<span class="tag gold">✓ דייר מאומת</span>' : ''}</div>
       <h1 style="margin-top:12px;font-size:28px">${esc(b.address)}${b.city ? `, ${esc(b.city)}` : ''}</h1>
-      <p class="lead" style="margin-top:6px">זה לא משטרה, זה שקיפות — להאיר איפה שחשוך.</p></section>`;
-    const quotes = b.quotes?.length ? `<section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.coins} הצעות מחיר לבניין</h3><span class="tag">${b.quotes.length}</span></div>
-      <ul class="rows">${b.quotes.map(q => `<li class="rowi" style="align-items:flex-start"><span class="ic ${q.status === 'selected' ? 'lime' : ''}">${q.status === 'selected' ? ICON.check : ICON.list}</span>
-        <span class="mid"><b>${esc(q.vendor_name)} · ${QCAT[q.category] || ''}</b><span>${money(q.price)}${q.price_unit === 'month' ? ' לחודש' : ' חד-פעמי'}${q.status === 'selected' ? ' · נבחרה' : ''}</span>
-        ${q.is_group_deal ? '<span><span class="tag gold" style="margin-top:4px">הצעה קבוצתית מוזלת דרך Sponja</span></span>' : ''}
-        ${q.details ? `<span style="white-space:normal">${esc(q.details)}</span>` : ''}</span></li>`).join('')}</ul></section>` : '';
+      <p class="lead" style="margin-top:6px">זה לא משטרה, זה שקיפות — להאיר איפה שחשוך.</p>
+      <div class="seg" role="group" aria-label="מי את/ה" style="margin:14px 0 0">
+        <button aria-pressed="${P.role !== 'committee'}" data-act="pubRole" data-v="resident">אני דייר בבניין</button>
+        <button aria-pressed="${P.role === 'committee'}" data-act="pubRole" data-v="committee">אני בוועד הבית</button></div>
+    </section>`;
+    if (P.role === 'committee') return shell(head + (b.has_committee
+      ? `<section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.key} לבניין כבר יש ועד ${b.committee_verified ? 'מאומת' : 'רשום'}</h3></div>
+          <p class="muted">אי אפשר לפתוח ועד נוסף לאותו בניין. אם את/ה חבר/ה בוועד, היכנס/י עם החשבון שפתח את הוועד. אם נראה לך שמישהו פתח את הוועד בטעות, כתבו לנו ונבדוק.</p>
+          <div class="row" style="margin-top:14px;gap:8px"><a class="btn sm lagoon" href="./">כניסה לחשבון הוועד</a><a class="btn sm ghost" href="mailto:mosheally@gmail.com?subject=${encodeURIComponent('ועד בית: ' + b.address)}">כתבו לנו</a></div></section>`
+      : `<section class="card lime" style="margin-top:12px"><div class="card-h"><h3>${ICON.key} עוד אין ועד דיגיטלי לבניין</h3></div>
+          <p>אפשר לקחת על זה אחריות עכשיו. ההרשמה לוקחת דקה, ו${b.interest_count ? `${b.interest_count} ההצבעות של השכנים` : 'כל ההצבעות'} והמדבקות נשמרות.</p>
+          <p class="muted small" style="margin-top:6px">אחרי ההרשמה נתקשר לאמת שאת/ה בוועד, ואז יופיע ליד הבניין הסימון ״ועד מאומת״.</p>
+          <button class="btn" style="margin-top:14px" data-act="pubClaim" data-id="${b.id}">פתיחת ועד לבניין הזה</button></section>`));
     if (b.status === 'pending_interest') {
       const me = voted(b.id), n = b.interest_count || 0, of = b.units_count;
       const share = `היי שכנים, סרקתי את המדבקה בכניסה — יש פה מערכת שמראה מתי מנקים את הבניין, קבלות והצעות מחיר מספקים בשקיפות מלאה (והקמת ועד דיגיטלי חינם). כבר ${n} מאיתנו בבניין סימנו שאנחנו בעניין. כנסו לסמן גם: ${P.t ? bldLink(b.id, P.t) : bldLink(b.id)}`;
       return shell(head + `<section class="card lime" style="margin-top:12px">
         <span class="lbl-s" style="color:rgba(31,59,23,.7)">הבניין שלך עדיין לא מחובר לניהול וניקיון שקוף</span>
         <div class="big num" style="margin:8px 0 2px">${n}<small>${of ? ` / ${of}` : ''}</small></div>
-        <p style="font-weight:600">${n === 1 ? 'שכן אחד כבר סימן עניין' : `שכנים כבר סימנו עניין`}${of ? ` מתוך ${of} דירות` : ''}</p>
+        <p style="font-weight:600">${n === 1 ? 'שכן אחד כבר סימן עניין' : 'שכנים כבר סימנו עניין'}${of ? ` מתוך ${of} דירות` : ''}</p>
         ${of ? `<div class="progress" style="background:#fff;margin-top:10px" aria-hidden="true"><i style="width:${Math.min(100, n / of * 100)}%"></i></div>` : ''}
         <div style="margin-top:16px">${me
           ? `<p style="font-weight:600;margin-bottom:10px">${ICON.check.replace('<svg','<svg width="18" height="18"')} הקול שלך נספר. עכשיו נשאר להביא עוד שכנים:</p>
@@ -1541,10 +1650,9 @@ V.building = {
           : `<button class="btn" data-act="bldVote" data-id="${b.id}" ${P.voting ? 'disabled' : ''}>${P.voting ? 'שומר…' : 'אני בעניין — תוסיפו את הקול שלי לבניין'}</button>`}</div>
       </section>
       <section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.eye} מה יהיה כאן כשהבניין יתחבר</h3></div><ul class="perks" style="margin:0">
-        <li>תאריך ושעה של כל ניקיון, עם תמונות וצ׳ק-ליסט.</li><li>הקבלות של הבניין, במקום אחד.</li><li>הצעות מחיר מספקים שונים, שכל הדיירים רואים.</li></ul></section>` + quotes);
+        <li>תאריך ושעה של כל ניקיון, עם תמונות וצ׳ק-ליסט.</li><li>הקבלות של הבניין, במקום אחד.</li><li>הצעות מחיר מספקים שונים, שכל הדיירים רואים.</li></ul></section>`);
     }
-    const lc = b.last_cleaning;
-    const when = lc ? (lc.finished_at || lc.started_at) : null;
+    const lc = b.last_cleaning, when = lc ? (lc.finished_at || lc.started_at) : null;
     const done = lc?.checklist ? CHECK_B.filter(([k]) => lc.checklist[k]) : [];
     const cleaning = lc ? `<section class="card" style="margin-top:12px">
         <div class="card-h"><h3>${ICON.broom} הניקיון האחרון</h3>${lc.approved ? '<span class="chip green">אושר</span>' : ''}</div>
@@ -1553,10 +1661,69 @@ V.building = {
         <div class="ph-grid four" style="margin-top:12px">${SLOTS_B.map(([k, l]) => lc.photos?.[k] ? `<div class="ph"><img src="${esc(lc.photos[k])}" alt="${l}" data-act="zoom" loading="lazy"><span class="lbl">${l}</span></div>` : `<div class="ph"><div class="empty" style="padding:30px 6px">${l}</div></div>`).join('')}</div>
         ${done.length ? `<ul class="perks" style="margin:14px 0 0">${done.map(([, l]) => `<li>${l}</li>`).join('')}</ul>` : ''}
       </section>` : `<section class="card empty" style="margin-top:12px"><h3>עוד לא תועד ניקיון</h3><p>הניקיון הראשון שיתועד יופיע כאן עם תמונות.</p></section>`;
+    if (!b.verified) return shell(head + cleaning + `<section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.key} קבלות, הצעות מחיר ופניות</h3></div>
+      <p class="muted">${P.keyGone ? 'קישור הדיירים שהיה לך הוחלף על ידי הוועד. ' : ''}החלק הזה פתוח לדיירי הבניין בלבד. בקשו מהוועד את קישור הדיירים, הוא נשלח בקבוצת הוואטסאפ של הבניין. מספיק ללחוץ עליו פעם אחת מהטלפון.</p></section>`);
+    const quotes = b.quotes.length ? `<section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.coins} הצעות מחיר לבניין</h3><span class="tag">${b.quotes.length}</span></div>
+      <ul class="rows">${b.quotes.map(q => `<li class="rowi" style="align-items:flex-start"><span class="ic ${q.status === 'selected' ? 'lime' : ''}">${q.status === 'selected' ? ICON.check : ICON.list}</span>
+        <span class="mid"><b>${esc(q.vendor_name)} · ${QCAT[q.category] || ''}</b><span>${money(q.price)}${q.price_unit === 'month' ? ' לחודש' : ' חד-פעמי'}${q.status === 'selected' ? ' · נבחרה' : ''}</span>
+        ${q.is_group_deal ? '<span><span class="tag gold" style="margin-top:4px">הצעה קבוצתית מוזלת דרך Sponja</span></span>' : ''}
+        ${q.details ? `<span style="white-space:normal">${esc(q.details)}</span>` : ''}</span></li>`).join('')}</ul></section>` : '';
     const receipts = `<section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.wallet} קבלות אחרונות</h3></div>
-      ${b.receipts?.length ? `<ul class="rows">${b.receipts.map(r => `<li class="rowi"><span class="ic">${ICON.list}</span><span class="mid"><b>${esc(r.title)}</b><span>${fmtShort(r.receipt_date)}${r.vendor_name ? ` · ${esc(r.vendor_name)}` : ''}</span></span>
+      ${b.receipts.length ? `<ul class="rows">${b.receipts.map(r => `<li class="rowi"><span class="ic">${ICON.list}</span><span class="mid"><b>${esc(r.title)}</b><span>${fmtShort(r.receipt_date)}${r.vendor_name ? ` · ${esc(r.vendor_name)}` : ''}</span></span>
         <span class="end" style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">${r.amount != null ? `<b class="num">${money(r.amount)}</b>` : ''}${r.file_url ? `<a class="btn xs ghost" href="${esc(r.file_url)}" target="_blank" rel="noopener">צפייה</a>` : ''}</span></li>`).join('')}</ul>` : '<p class="muted">עוד לא הועלו קבלות.</p>'}</section>`;
-    return shell(head + cleaning + receipts + quotes);
+    const report = `<section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.list} פנייה לוועד</h3></div>
+      ${P.sent ? `<div class="alert green" style="margin:0 0 12px">הפנייה נשלחה${P.sent === 'cleaning' ? ' לוועד ולמנקה' : ' לוועד'}. תודה!</div>` : ''}
+      <form data-submit="pubReport">
+        <div class="choices" style="margin-bottom:12px">${Object.entries(ICAT).map(([k, l]) => `<button type="button" class="choice" aria-pressed="${P.cat === k}" data-act="pubCat" data-v="${k}">${l}</button>`).join('')}</div>
+        <textarea class="inp" name="body" required minlength="2" maxlength="1000" placeholder="${P.cat === 'cleaning' ? 'למשל: חדר האשפה לא נוקה השבוע' : 'מה קרה ואיפה'}"></textarea>
+        <p class="muted small" style="margin:6px 0 12px">${P.cat === 'cleaning' ? 'פנייה על ניקיון מגיעה לוועד ולמנקה של הבניין.' : 'הפנייה מגיעה לוועד.'} השם שלך לא מוצג.</p>
+        <button class="btn lagoon" type="submit" ${P.sending ? 'disabled' : ''}>${P.sending ? 'שולח…' : 'שליחת הפנייה'}</button></form></section>`;
+    return shell(head + cleaning + report + receipts + quotes);
+  }
+};
+
+/* ═════════════ supplier upload page (no sign-in) ═════════════ */
+const supApi = {
+  async info(s){
+    if (DEMO) return D.supplierInfo(s);
+    const r = await fetch(`${CFG.url}/functions/v1/building-supplier?s=${encodeURIComponent(s)}`, {headers:{apikey:CFG.key}});
+    return r.ok ? r.json() : null;
+  },
+  async send(fd){
+    if (DEMO) return D.supplierAdd(fd);
+    const r = await fetch(`${CFG.url}/functions/v1/building-supplier`, {method:'POST', headers:{apikey:CFG.key}, body:fd});
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || 'ההעלאה נכשלה, נסו שוב');
+    return j;
+  }
+};
+V.supplier = {
+  async boot(){
+    S.sup = {s:qs.get('s'), loading:true};
+    paint();
+    try { S.sup.info = KEYRX.test(S.sup.s || '') ? await supApi.info(S.sup.s) : null; } catch { S.sup.info = null; }
+    S.sup.loading = false; paint();
+  },
+  html(){
+    const P = S.sup || {}, i = P.info;
+    const shell = inner => `<div class="lp" style="max-width:520px"><div class="lp-top"><span class="brand"><i aria-hidden="true"></i>CleanEilat</span></div>${inner}
+      <footer class="lp-foot"><a href="terms.html">תנאי שימוש</a> · <a href="privacy.html">מדיניות פרטיות</a></footer></div>`;
+    if (P.loading) return shell(`<section class="card" style="text-align:center;padding:40px 20px"><div class="spin" style="margin:0 auto"></div></section>`);
+    if (!i) return shell(`<section class="card empty"><h3>הקישור הזה כבר לא פעיל</h3><p>ועד הבית החליף אותו. בקשו מהוועד את הקישור החדש לספקים.</p></section>`);
+    if (P.done) return shell(`<section class="card lime" style="text-align:center;padding:30px 20px"><div class="circle" style="margin:0 auto 14px;background:#fff">${ICON.check}</div>
+        <h1 style="font-size:24px">הקבלה התקבלה</h1><p class="muted" style="margin-top:6px">היא נכנסה למגירה של ${esc(i.address)}. הוועד לא צריך לעשות כלום.</p>
+        <button class="btn" style="margin-top:16px" data-act="supAgain">העלאת קבלה נוספת</button></section>`);
+    return shell(`<section class="card hero-card"><span class="tag gold">קישור לספקים</span>
+        <h1 style="margin-top:12px;font-size:26px">העלאת קבלה ל${esc(i.address)}${i.city ? ', ' + esc(i.city) : ''}</h1>
+        <p class="lead" style="margin-top:6px">מצלמים את הקבלה או החשבונית, והיא נכנסת ישר למגירה של הבניין. בלי הרשמה.</p></section>
+      <form class="card" style="margin-top:12px" data-submit="supSend">
+        <label class="f"><span>שם העסק / הספק</span><input class="inp" name="vendor" required maxlength="120" value="${esc(localStorage.getItem('ce_vendor') || '')}"></label>
+        <label class="f"><span>על מה הקבלה</span><input class="inp" name="title" required minlength="2" maxlength="160" placeholder="למשל: ניקיון חודש נובמבר"></label>
+        <div class="grid2"><label class="f"><span>סכום (₪)</span><input class="inp" name="amount" type="number" min="0" step="0.01" inputmode="decimal"></label>
+        <label class="f"><span>תאריך</span><input class="inp" name="date" type="date" value="${today()}" required></label></div>
+        <label class="f"><span>צילום הקבלה או קובץ PDF</span><input class="inp" name="file" type="file" accept="image/*,application/pdf" required></label>
+        <button class="btn lagoon" type="submit" ${P.sending ? 'disabled' : ''}>${P.sending ? 'מעלה…' : 'שליחת הקבלה'}</button>
+      </form>`);
   }
 };
 
@@ -1619,7 +1786,9 @@ V.admin = {
             <button class="btn xs ghost" data-act="bldDocs" data-id="${b.id}">הצעות מחיר וקבלות</button>
             <button class="btn xs ghost" data-act="nfcOpen" data-id="${b.id}">צריבת מדבקות</button>
             <button class="btn xs ghost" data-act="bldQr" data-id="${b.id}">QR</button>
-            <button class="btn xs ghost" data-act="bldForm" data-id="${b.id}">עריכה</button></div></div>`; }).join('')
+            <button class="btn xs ghost" data-act="bldForm" data-id="${b.id}">עריכה</button></div>
+          ${b.host_id ? `<div class="row" style="margin-top:10px;gap:8px;align-items:center">${b.committee_verified ? '<span class="tag gold">✓ ועד מאומת</span>' : `<span class="tag">ועד ממתין לאימות</span><a class="btn xs ghost" href="tel:${esc(d.profiles.find(p => p.id === b.host_id)?.phone || '')}">התקשרות</a>`}
+            <button class="btn xs ${b.committee_verified ? 'ghost' : 'lagoon'}" data-act="bldVerify" data-id="${b.id}" data-v="${b.committee_verified ? '' : 1}">${b.committee_verified ? 'ביטול האימות' : 'סימון כוועד מאומת'}</button></div>` : ''}</div>`; }).join('')
         : `<div class="card empty"><h3>עוד אין בניינים</h3><p>אפשר לפתוח כרטיס בניין גם לפני שוועד הבית נרשם, במצב ״ממתין לביקוש דיירים״.</p><button class="btn lagoon sm" data-act="bldForm">בניין חדש</button></div>`}
       <p class="muted small" style="margin-top:10px">ניקיון לבניין מוסיפים בלשונית ״ניקיונות״ (הוספת ניקיון). המנקה מקבל/ת צ׳ק-ליסט ו-4 תמונות של בניין, והתמונות מופיעות בדף הבניין.</p>`;
   },
@@ -1888,7 +2057,7 @@ const ACT = {
       const prices = host ? {} : Object.fromEntries(SIZES.filter(([k]) => +o.prices?.[k] > 0).map(([k]) => [k, +o.prices[k]]));
       await api.rpc('submit_onboarding_v2', {p_role:role, p_full_name:o.full_name.trim(), p_phone:o.phone.trim(), p_answers:committee ? {...o.answers, kind:'committee'} : o.answers, p_area:o.answers.area || null, p_bio:host ? null : (o.bio || '').trim() || null,
         p_prices:prices, p_payment_info:host ? null : o.payment_info.trim(), p_business_type:host ? null : o.business_type, p_business_number:host ? null : o.business_number.trim(), p_id_doc_path:idPath, p_business_doc_path:bizPath});
-      localStorage.removeItem('ce_role');
+      localStorage.removeItem('ce_role'); localStorage.removeItem('ce_claim');
       S.profile = await api.me();
       if (committee && o.claim) await api.rpc('claim_building', {p_building:o.claim});
       else if (committee) { const a = o.answers.address.trim();
@@ -1974,7 +2143,50 @@ const ACT = {
       toast(r.errors?.length ? 'היומן לא נקרא: ' + r.errors[0].replace(/^[^:]+:\s*/, '') : r.created ? `נוספו ${r.created} ניקיונות מהיומן` : 'היומן מעודכן, אין הזמנות חדשות'); }); },
   async connReq(el){ el.disabled = true; await run(async () => { await api.rpc('request_connection', {p_cleaner:el.dataset.id}); await refresh(true); }, 'הבקשה נשלחה למנקה'); },
 
+  /* public building page */
+  pubRole(el){ S.pub.role = el.dataset.v; paint(); },
+  pubCat(el){ S.pub.cat = el.dataset.v; S.pub.sent = null; paint(); },
+  pubClaim(el){ const b = S.pub.data;
+    localStorage.setItem('ce_role', 'committee'); localStorage.setItem('ce_claim', JSON.stringify({id:b.id, address:b.address, city:b.city}));
+    location.href = './?for=committee' + (DEMO ? '&demo&as=new' : ''); },
+  supAgain(){ S.sup.done = false; paint(); },
   /* house committee */
+  async kCopy(el){ try { await navigator.clipboard.writeText(el.dataset.v); toast('הקישור הועתק'); } catch { prompt('העתיקו את הקישור:', el.dataset.v); } },
+  async kRotate(el){
+    const kind = el.dataset.kind, b = S.data.aps[0];
+    if (!DEMO && !confirm(kind === 'resident' ? 'לאפס את קישור הדיירים? הקישור הישן יפסיק לעבוד, ותצטרכו לשלוח את החדש בקבוצת הבניין.' : 'לאפס את קישור הספקים? הקישור הישן יפסיק לעבוד, ותצטרכו לשלוח את החדש לספקים.')) return;
+    await run(async () => { await api.rpc('rotate_building_token', {p_building:b.id, p_kind:kind}); await refresh(true); }, 'נוצר קישור חדש. שלחו אותו שוב');
+  },
+  async kHandled(el){ await run(async () => { await api.issueHandled(el.dataset.id); await refresh(true); }, 'סומן כטופל'); },
+  async kZip(el){
+    const m = S.kMonth, b = S.data.aps[0], rs = (S.data.receipts || []).filter(r => (r.receipt_date || '').slice(0, 7) === m);
+    if (!rs.length) return;
+    el.disabled = true; el.textContent = 'מכין קובץ…';
+    await run(async () => {
+      const {default: JSZip} = await import('https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm');
+      const zip = new JSZip(), clean = x => String(x || '').replace(/[\\/:*?"<>|\n\r]+/g, ' ').trim().slice(0, 40);
+      const urls = DEMO ? Object.fromEntries(rs.filter(r => r.file_path).map(r => [r.file_path, r.file_path])) : await api.signedUrls('building-docs', rs.filter(r => r.file_path).map(r => r.file_path));
+      const used = {}, rows = [['תאריך','ספק','תיאור','סכום','קובץ','מקור']];
+      for (const r of rs) {
+        let fname = '';
+        if (r.file_path && urls[r.file_path]) {
+          const blob = await (await fetch(urls[r.file_path])).blob();
+          const ext = (r.file_path.match(/\.([a-z0-9]{2,5})$/i) || [])[1]?.toLowerCase() || ({'application/pdf':'pdf', 'image/png':'png', 'image/webp':'webp', 'image/svg+xml':'svg'})[blob.type] || 'jpg';
+          let base = [r.receipt_date, clean(r.vendor_name) || 'ספק', r.amount != null ? r.amount + '₪' : ''].filter(Boolean).join('_');
+          used[base] = (used[base] || 0) + 1; if (used[base] > 1) base += '_' + used[base];
+          fname = base + '.' + ext; zip.file(fname, blob);
+        }
+        rows.push([r.receipt_date, r.vendor_name || '', r.title, r.amount ?? '', fname, r.source === 'supplier' ? 'ספק' : 'ועד']);
+      }
+      zip.file('סיכום.csv', '\ufeff' + rows.map(x => x.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\r\n'));
+      const out = await zip.generateAsync({type:'blob'}), a = document.createElement('a');
+      a.href = URL.createObjectURL(out); a.download = `קבלות_${clean(b.address)}_${m}.zip`; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+    }, 'הקובץ ירד למכשיר');
+    if (document.contains(el)) { el.disabled = false; el.textContent = 'הורדת כל הקבלות של החודש'; }
+  },
+  async bldVerify(el){ const v = !!el.dataset.v;
+    await run(async () => { await api.upd('apartments', el.dataset.id, {committee_verified:v}); await refresh(true); }, v ? 'סומן כוועד מאומת' : 'הסימון הוסר'); },
   demoCommittee(){ location.href = location.pathname + '?demo&as=committee'; },
   async kActivate(el){ await run(async () => { await api.upd('apartments', el.dataset.id, {connection_status:'active'}); await refresh(true); }, 'הדף המלא פעיל לדיירים'); },
   kOrder(){
@@ -2116,8 +2328,10 @@ const CHG = {
     try { o.found = city ? await api.rpc('find_buildings', {p_city:city, p_address:address}) : []; } catch { o.found = o.found || []; }
     o.searching = false;
     if (o.claim && !o.found.some(x => x.id === o.claim)) o.claim = null;
+    if (o.pendingClaim && o.found.some(x => x.id === o.pendingClaim)) { o.claim = o.pendingClaim; o.pendingClaim = 'used'; }
     paint();
   },
+  kMonth(el){ if (el.value) { S.kMonth = el.value; paint(); } },
   async kCleaner(el){ await run(async () => { await api.rpc('set_apartment_cleaner', {p_apt:el.dataset.id, p_cleaner:el.value || null}); await refresh(true); }, el.value ? 'המנקה של הבניין נשמר/ה' : 'הוסר'); },
   nfcB(el){ S.nfcB = el.value; S.nfcPrefix = null; S.nfcStart = null; paint(); },
   async sub(el){ await run(async () => { await api.rpc('admin_set_sub', {p_user:el.dataset.id, p_status:el.value}); await refresh(true); }, 'המנוי עודכן'); },
@@ -2175,6 +2389,27 @@ const SUB = {
       S.modal = null; await refresh(true); toast(msg, msg.includes('לא נקרא') ? 'err' : '');
     });
     if (S.modal) { btn.disabled = false; btn.textContent = 'שמירה'; }
+  },
+  async pubReport(f){
+    const P = S.pub, body = f.body.value.trim(); if (body.length < 2) return toast('כתבו כמה מילים', 'err');
+    P.sending = true; paint();
+    try { await pubApi.report(P.data.id, P.key, P.cat, body); P.sent = P.cat; }
+    catch (e) { toast(e.message, 'err'); if (/הוחלף/.test(e.message)) { saveKey(P.data.id, null); P.data.verified = false; P.keyGone = true; } }
+    P.sending = false; paint();
+  },
+  async supSend(f){
+    const P = S.sup, file = f.file.files[0];
+    if (!file) return toast('צריך לצרף צילום של הקבלה', 'err');
+    if (file.size > 10e6 && file.type === 'application/pdf') return toast('הקובץ גדול מ-10MB', 'err');
+    P.sending = true; paint();
+    try {
+      const fd = new FormData(), up = file.type.startsWith('image/') && file.size > 1.5e6 ? await compress(file) : file;
+      fd.append('s', P.s); fd.append('vendor', f.vendor.value.trim()); fd.append('title', f.title.value.trim());
+      fd.append('amount', f.amount.value); fd.append('date', f.date.value); fd.append('file', up, up.name || (file.type === 'application/pdf' ? 'receipt.pdf' : 'receipt.jpg'));
+      localStorage.setItem('ce_vendor', f.vendor.value.trim());
+      await supApi.send(fd); P.done = true;
+    } catch (e) { toast(e.message, 'err'); }
+    P.sending = false; paint();
   },
   async kBld(f){
     const a = f.address.value.trim(), city = f.city.value.trim();
@@ -2275,6 +2510,10 @@ function live(){
   }).subscribe();
 }
 async function boot(){
+  if (qs.has('s')) {
+    if (DEMO) { if (!D.tasks) D.init(); S.cfg = D.settings; }
+    S.view = V.supplier; return V.supplier.boot();
+  }
   if (qs.has('t') || qs.has('b')) {
     if (DEMO) { if (!D.tasks) D.init(); S.cfg = D.settings; }
     S.view = V.building; return V.building.boot();
