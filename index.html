@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>CleanEilat · ניקיון ותפעול דירות נופש באילת</title>
-<meta name="description" content="פלטפורמת ניקיון ותפעול לדירות Airbnb באילת: שיבוץ יומי, תיעוד מצולם לפני ואחרי, ותשלום שמשתחרר עם אישור הניקיון.">
+<title>CleanEilat · ניהול ושקיפות לבנייני מגורים ודירות נופש</title>
+<meta name="description" content="ועד בית דיגיטלי ושקיפות לבנייני מגורים: מתי ניקו את הבניין, עם תמונות, קבלות והצעות מחיר מספקים. וגם ניקיון ותפעול לדירות נופש באילת.">
 <meta name="theme-color" content="#ECEEF1">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2313293D'/%3E%3Cpath d='M14 40c8-6 14-6 18 0s10 6 18 0' stroke='%2363C5C0' stroke-width='5' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='32' cy='22' r='7' fill='%23F5F7F6'/%3E%3C/svg%3E">
@@ -585,6 +585,14 @@ const D = {
         Object.assign(me, {desired_role:a.p_role, full_name:a.p_full_name, phone:a.p_phone, onboarding:a.p_answers, area:a.p_area, bio:a.p_bio, prices:a.p_prices, payment_info:a.p_payment_info, business_type:a.p_business_type, business_number:a.p_business_number, id_doc_path:a.p_id_doc_path, business_doc_path:a.p_business_doc_path});
         if (a.p_role === 'host') Object.assign(me, {role:'host', status:'approved', sub_status:'trial', trial_ends:addDays(today(), s.trial_days)}); else me.status = 'submitted';
         return me.status;
+      case 'find_buildings': { const n = x => (x || '').toLowerCase().replace(/(^|\s)(רחוב|רח'|רח)(\s|$)/g, ' ').replace(/[^א-תa-z0-9]/g, '');
+        if (!n(a.p_city)) return [];
+        return this.apartments.filter(x => x.kind === 'building' && !x.deleted_at && !x.host_id && n(x.city) === n(a.p_city))
+          .map(x => ({id:x.id, address:x.address, city:x.city, units_count:x.units_count, interest_count:x.interest_count || 0, status:x.connection_status, tags:this.nfc.filter(t => t.building_id === x.id).length, exact:!!n(a.p_address) && n(x.address) === n(a.p_address)}))
+          .sort((x, y) => (y.exact - x.exact) || (y.interest_count - x.interest_count)); }
+      case 'claim_building': { const b = this.apartments.find(x => x.id === a.p_building);
+        if (me.role !== 'host') err('צריך חשבון ועד בית כדי לחבר בניין'); if (b.host_id && b.host_id !== me.id) err('הבניין כבר מחובר לוועד אחר. כתבו לנו ונבדוק');
+        Object.assign(b, {host_id:me.id, connection_status:'active'}); return b.id; }
       case 'delete_apartment': { const ap = this.apartments.find(x => x.id === a.p_apt);
         if (this.tasks.some(x => x.apartment_id === ap.id && ['arrived','in_progress','submitted','needs_fix'].includes(x.status))) err('יש ניקיון שמתבצע עכשיו בדירה. אפשר להסיר אותה אחרי שהוא יסתיים ויאושר');
         this.tasks.filter(x => x.apartment_id === ap.id && ['pending','requested'].includes(x.status)).forEach(x => x.status = 'cancelled');
@@ -881,7 +889,7 @@ const authBlock = role => `<div class="auth">
   </details>
 </div>`;
 const V = {};
-const lpSeg = () => `<div class="seg" role="group" aria-label="למי האתר" style="max-width:480px">${[['cleaner','אני מנקה'], ['host','יש לי דירות'], ['committee','ועד בית']].map(([v, l]) => `<button aria-pressed="${S.lpAud === v}" data-act="lpAud" data-v="${v}">${l}</button>`).join('')}</div>`;
+const lpSeg = () => `<div class="seg" role="group" aria-label="למי האתר" style="max-width:480px">${[['committee','ועד בית'], ['host','יש לי דירות'], ['cleaner','אני מנקה']].map(([v, l]) => `<button aria-pressed="${S.lpAud === v}" data-act="lpAud" data-v="${v}">${l}</button>`).join('')}</div>`;
 V.landing = {
   committee(){
     const steps = [['פותחים ועד דיגיטלי','נרשמים עם Google. חינם.'], ['מוסיפים את הבניין','כתובת ומספר דירות, ונפתח לבניין דף שקוף.'], ['משתפים את הדיירים','קישור בקבוצת הוואטסאפ, או QR / מדבקת NFC בכניסה.'], ['רואים כל ניקיון','המנקה מצלם/ת בסוף, והדיירים רואים מתי ומה נוקה.']];
@@ -928,7 +936,7 @@ V.landing = {
   </div>`;
   },
   html(){
-    S.lpAud ??= ['host','committee'].includes(qs.get('for')) ? qs.get('for') : 'cleaner';
+    S.lpAud ??= ['host','committee','cleaner'].includes(qs.get('for')) ? qs.get('for') : 'committee';
     if (S.lpAud === 'committee') return this.committee();
     const host = S.lpAud === 'host';
     const role = host ? 'host' : 'cleaner';
@@ -1000,12 +1008,22 @@ const Q_CLEANER = [
   ['car','ניידות',['יש לי רכב','בלי רכב']],
   ['source','איך שמעת עלינו?',['חבר/ה','פייסבוק','אינסטגרם','אחר']]
 ];
+const claimBox = o => {
+  const f = o.found || [], sel = f.find(x => x.id === o.claim), ex = f.filter(x => x.exact), rest = f.filter(x => !x.exact && x.id !== o.claim);
+  const meta = x => `${x.interest_count === 1 ? 'שכן אחד סימן עניין' : x.interest_count ? `${x.interest_count} שכנים סימנו עניין` : 'עוד אין הצבעות'}${x.tags === 1 ? ' · מדבקה אחת' : x.tags ? ` · ${x.tags} מדבקות` : ''}`;
+  if (sel) return `<div class="alert green" style="margin:0 0 14px">מתחברים לבניין שכבר נפתח: <b>${esc(sel.address)}${sel.city ? ', ' + esc(sel.city) : ''}</b><br>${meta(sel)}. ההצבעות והמדבקות נשמרות, והדף יעבור למצב פעיל. <button class="linkbtn" data-act="kPick" data-id="">ביטול</button></div>`;
+  return (ex.length ? ex.map(x => `<div class="alert orange" style="margin:0 0 14px"><b>הבניין הזה כבר נפתח באתר.</b> ${meta(x)}. כדי שלא ייפתח כפול, חברו את החשבון לבניין הקיים:<br><button class="btn sm lagoon" style="margin-top:10px" data-act="kPick" data-id="${x.id}">זה הבניין שלנו</button></div>`).join('') : '')
+    + (rest.length ? `<details style="margin-bottom:14px"><summary class="small" style="cursor:pointer;font-weight:600">בניינים שכבר נפתחו ב${esc(o.answers.city ?? 'אילת')} ומחכים לוועד (${rest.length})</summary>
+      <ul class="rows" style="margin-top:8px">${rest.map(x => `<li class="rowi"><span class="ic">${ICON.key}</span><span class="mid"><b>${esc(x.address)}</b><span>${meta(x)}</span></span><span class="end"><button class="btn xs ghost" data-act="kPick" data-id="${x.id}">זה הבניין שלנו</button></span></li>`).join('')}</ul></details>` : '')
+    + (o.searching ? '<p class="muted small" style="margin:-6px 0 12px">בודק אם הבניין כבר קיים…</p>' : '');
+};
 V.onboarding = {
   load(){
     const p = S.profile, o = S.ob;
     o.full_name ??= p.full_name || ''; o.phone ??= p.phone || '';
     o.role ??= ['host','cleaner'].includes(p.desired_role) ? p.desired_role : (localStorage.getItem('ce_role') || null);
     o.prices ??= {...(p.prices || {})}; o.payment_info ??= p.payment_info || ''; o.bio ??= p.bio || '';
+    if (o.role === 'committee' && !o.found) CHG.kSearch();
   },
   html(){
     const p = S.profile, o = S.ob;
@@ -1029,9 +1047,10 @@ V.onboarding = {
     if (o.role === 'committee') return topbar() + `<main class="shell">
       <div class="hello"><p style="font-weight:600;color:var(--lime-ink)">ועד בית דיגיטלי, חינם</p><h1>פרטי הבניין</h1></div>
       <section class="card">${basics}
-        <label class="f"><span>כתובת הבניין</span><input class="inp" data-bind="ob.answers.address" value="${esc(o.answers.address || '')}" placeholder="רחוב ומספר בית" required></label>
-        <div class="grid2"><label class="f"><span>עיר</span><input class="inp" data-bind="ob.answers.city" value="${esc(o.answers.city ?? 'אילת')}"></label>
-        <label class="f"><span>מספר דירות בבניין</span><input class="inp" type="number" min="1" max="2000" inputmode="numeric" data-bind="ob.answers.units" value="${esc(o.answers.units || '')}"></label></div>
+        <label class="f"><span>כתובת הבניין</span><input class="inp" data-bind="ob.answers.address" data-change="kSearch" value="${esc(o.answers.address || '')}" placeholder="רחוב ומספר בית" required ${o.claim ? 'disabled' : ''}></label>
+        <div class="grid2"><label class="f"><span>עיר</span><input class="inp" data-bind="ob.answers.city" data-change="kSearch" value="${esc(o.answers.city ?? 'אילת')}" ${o.claim ? 'disabled' : ''}></label>
+        <label class="f"><span>מספר דירות בבניין</span><input class="inp" type="number" min="1" max="2000" inputmode="numeric" data-bind="ob.answers.units" value="${esc(o.answers.units || '')}" ${o.claim ? 'disabled' : ''}></label></div>
+        ${claimBox(o)}
         ${agree('קראתי ואני מסכים/ה ל')}
         <div class="row" style="flex-wrap:nowrap"><button class="btn ghost sm" data-act="obRole" data-v="">שינוי</button><button class="btn lagoon" style="flex:1" data-act="obSubmit" ${o.sending ? 'disabled' : ''}>${o.sending ? 'פותח…' : 'פתיחת הוועד הדיגיטלי'}</button></div>
       </section></main>`;
@@ -1850,7 +1869,9 @@ const ACT = {
   recheck: async () => { S.profile = await api.me(); route(); },
 
   /* onboarding */
-  obRole(el){ S.ob.role = el.dataset.v || null; S.ob.step = 0; if (el.dataset.v) localStorage.setItem('ce_role', el.dataset.v); scrollTo(0,0); paint(); },
+  obRole(el){ S.ob.role = el.dataset.v || null; S.ob.step = 0; if (el.dataset.v) localStorage.setItem('ce_role', el.dataset.v); scrollTo(0,0); paint(); if (S.ob.role === 'committee') CHG.kSearch(); },
+  kPick(el){ const o = S.ob; o.claim = el.dataset.id || null; const b = (o.found || []).find(x => x.id === o.claim);
+    if (b) Object.assign(o.answers, {address:b.address, city:b.city || o.answers.city, units:b.units_count || o.answers.units}); paint(); },
   obPick(el){ const {k, v, multi} = el.dataset; const a = S.ob.answers; if (multi) { a[k] = a[k] || []; a[k] = a[k].includes(v) ? a[k].filter(x => x !== v) : [...a[k], v]; } else a[k] = v; paint(); },
   obBiz(el){ S.ob.business_type = el.dataset.v; paint(); },
   obBack(){ S.ob.step--; paint(); },
@@ -1868,6 +1889,10 @@ const ACT = {
     const o = S.ob, committee = o.role === 'committee', role = committee ? 'host' : o.role, host = role === 'host';
     const e = validBasics(o); if (e) return toast(e, 'err');
     if (committee && (o.answers.address || '').trim().length < 3) return toast('נא למלא את כתובת הבניין', 'err');
+    if (committee && !o.claim) {
+      await CHG.kSearch();
+      if ((o.found || []).some(x => x.exact)) return toast('הבניין הזה כבר נפתח באתר. בחרו ״זה הבניין שלנו״ כדי שההצבעות והמדבקות יישמרו', 'err');
+    }
     if (!host) {
       if (!o.business_type) return toast('נא לבחור סוג עסק', 'err');
       if (!(o.business_number || '').trim()) return toast('נא למלא מספר עוסק', 'err');
@@ -1885,9 +1910,10 @@ const ACT = {
         p_prices:prices, p_payment_info:host ? null : o.payment_info.trim(), p_business_type:host ? null : o.business_type, p_business_number:host ? null : o.business_number.trim(), p_id_doc_path:idPath, p_business_doc_path:bizPath});
       localStorage.removeItem('ce_role');
       S.profile = await api.me();
-      if (committee) { const a = o.answers.address.trim();
+      if (committee && o.claim) await api.rpc('claim_building', {p_building:o.claim});
+      else if (committee) { const a = o.answers.address.trim();
         await api.ins('apartments', {kind:'building', name:a, address:a, city:(o.answers.city ?? 'אילת').trim() || null, units_count:+o.answers.units || null, host_id:S.profile.id, connection_status:'active'}); }
-    }, committee ? 'הוועד הדיגיטלי נפתח' : host ? 'החשבון נפתח. החודש הראשון חינם' : 'נשלח לאימות');
+    }, committee ? (o.claim ? 'החשבון חובר לבניין. כל ההצבעות והמדבקות נשמרו' : 'הוועד הדיגיטלי נפתח') : host ? 'החשבון נפתח. החודש הראשון חינם' : 'נשלח לאימות');
     o.sending = false; route();
   },
 
@@ -2103,6 +2129,15 @@ const CHG = {
     S.ob[k + 'File'] = blob; S.ob[k + 'Preview'] = f.type === 'application/pdf' ? 'pdf' : URL.createObjectURL(blob); paint();
   },
   date(el){ if (el.value) { S.adminDate = el.value; refresh(); } },
+  async kSearch(){
+    const o = S.ob; if (!o) return;
+    const city = (o.answers.city ?? 'אילת').trim(), address = (o.answers.address || '').trim();
+    o.searching = true;
+    try { o.found = city ? await api.rpc('find_buildings', {p_city:city, p_address:address}) : []; } catch { o.found = o.found || []; }
+    o.searching = false;
+    if (o.claim && !o.found.some(x => x.id === o.claim)) o.claim = null;
+    paint();
+  },
   async kCleaner(el){ await run(async () => { await api.rpc('set_apartment_cleaner', {p_apt:el.dataset.id, p_cleaner:el.value || null}); await refresh(true); }, el.value ? 'המנקה של הבניין נשמר/ה' : 'הוסר'); },
   nfcB(el){ S.nfcB = el.value; S.nfcPrefix = null; S.nfcStart = null; paint(); },
   async sub(el){ await run(async () => { await api.rpc('admin_set_sub', {p_user:el.dataset.id, p_status:el.value}); await refresh(true); }, 'המנוי עודכן'); },
@@ -2162,8 +2197,14 @@ const SUB = {
     if (S.modal) { btn.disabled = false; btn.textContent = 'שמירה'; }
   },
   async kBld(f){
-    const a = f.address.value.trim();
-    await run(async () => { await api.ins('apartments', {kind:'building', name:a, address:a, city:f.city.value.trim(), units_count:+f.units.value || null, host_id:S.profile.id, connection_status:'active'}); await refresh(true); }, 'הבניין נוסף');
+    const a = f.address.value.trim(), city = f.city.value.trim();
+    await run(async () => {
+      const ex = (await api.rpc('find_buildings', {p_city:city, p_address:a})).find(x => x.exact);
+      if (ex && (DEMO || confirm(`הבניין ${ex.address} כבר נפתח באתר (${ex.interest_count || 0} שכנים סימנו עניין). לחבר אותו לחשבון שלך? ההצבעות והמדבקות יישמרו.`))) {
+        await api.rpc('claim_building', {p_building:ex.id}); await refresh(true); toast('החשבון חובר לבניין הקיים'); return;
+      }
+      await api.ins('apartments', {kind:'building', name:a, address:a, city, units_count:+f.units.value || null, host_id:S.profile.id, connection_status:'active'}); await refresh(true); toast('הבניין נוסף');
+    });
   },
   async kOrder(f){
     const b = S.data.aps.find(a => a.id === f.dataset.b);
