@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>CleanEilat · ניהול ושקיפות לבנייני מגורים ודירות נופש</title>
-<meta name="description" content="ועד בית דיגיטלי ושקיפות לבנייני מגורים: מתי ניקו את הבניין, עם תמונות, קבלות והצעות מחיר מספקים. וגם ניקיון ותפעול לדירות נופש באילת.">
+<title>CleanEilat · ועד בית דיגיטלי ושקיפות לבנייני מגורים</title>
+<meta name="description" content="ועד בית דיגיטלי ושקיפות לדיירים: מתי ניקו את הבניין ועם אילו תמונות, הקבלות של הבניין והצעות מחיר מספקים, במקום אחד. חינם לוועדי בית באילת.">
 <meta name="theme-color" content="#ECEEF1">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2313293D'/%3E%3Cpath d='M14 40c8-6 14-6 18 0s10 6 18 0' stroke='%2363C5C0' stroke-width='5' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='32' cy='22' r='7' fill='%23F5F7F6'/%3E%3C/svg%3E">
@@ -743,6 +743,12 @@ const api = {
     const tasks = aps.length ? await q(sb.from('tasks').select(TASK_SEL).in('apartment_id', aps.map(a => a.id)).gte('task_date', from).lte('task_date', to).neq('status','cancelled').order('task_date', {ascending:false})) : [];
     return {aps, tasks};
   },
+  async bldMonth(){
+    const from = today().slice(0, 8) + '01';
+    if (DEMO) return D.tasks.filter(t => t.task_date >= from && ['submitted','approved'].includes(t.status) && D.apartments.find(a => a.id === t.apartment_id)?.kind === 'building').length;
+    const r = await q(sb.from('tasks').select('id, apartment:apartments!inner(kind)').eq('apartment.kind', 'building').gte('task_date', from).in('status', ['submitted','approved']));
+    return r.length;
+  },
   async tags(){ return DEMO ? [...D.nfc] : q(sb.from('nfc_tags').select('*')); },
   async tagIns(row){
     if (DEMO) { if (D.nfc.some(t => t.tag_id === row.tag_id)) throw new Error('duplicate key 23505'); D.nfc.push({...row, locked:false}); return; }
@@ -863,7 +869,7 @@ function topbar(){
       : `<a class="brand" href="#" data-act="home"><i aria-hidden="true"></i>CleanEilat</a>`}
     <span class="sp"></span>
     ${DEMO ? `<label class="sr" for="demoSw">החלף תצוגה בהדגמה</label><select id="demoSw" class="demo-sw" data-change="demoRole">
-      ${[['cleaner','הדגמה: מנקה'], ['admin','הדגמה: מנהל'], ['host','הדגמה: בעל דירה'], ['committee','הדגמה: ועד בית'], ['new','הדגמה: נרשם חדש']].map(([v, l]) => `<option value="${v}" ${D.cur === v ? 'selected' : ''}>${l}</option>`).join('')}
+      ${[['cleaner','הדגמה: מנקה'], ['admin','הדגמה: מנהל'], ['committee','הדגמה: ועד בית'], ['new','הדגמה: נרשם חדש']].map(([v, l]) => `<option value="${v}" ${D.cur === v ? 'selected' : ''}>${l}</option>`).join('')}
     </select>` : `<span class="brand hide-sm"><i aria-hidden="true"></i></span>`}
   </div></header>`;
 }
@@ -889,7 +895,7 @@ const authBlock = role => `<div class="auth">
   </details>
 </div>`;
 const V = {};
-const lpSeg = () => `<div class="seg" role="group" aria-label="למי האתר" style="max-width:480px">${[['committee','ועד בית'], ['host','יש לי דירות'], ['cleaner','אני מנקה']].map(([v, l]) => `<button aria-pressed="${S.lpAud === v}" data-act="lpAud" data-v="${v}">${l}</button>`).join('')}</div>`;
+const lpSeg = () => `<div class="seg" role="group" aria-label="למי האתר" style="max-width:420px">${[['committee','ועד בית'], ['cleaner','אני מנקה']].map(([v, l]) => `<button aria-pressed="${S.lpAud === v}" data-act="lpAud" data-v="${v}">${l}</button>`).join('')}</div>`;
 V.landing = {
   committee(){
     const steps = [['פותחים ועד דיגיטלי','נרשמים עם Google. חינם.'], ['מוסיפים את הבניין','כתובת ומספר דירות, ונפתח לבניין דף שקוף.'], ['משתפים את הדיירים','קישור בקבוצת הוואטסאפ, או QR / מדבקת NFC בכניסה.'], ['רואים כל ניקיון','המנקה מצלם/ת בסוף, והדיירים רואים מתי ומה נוקה.']];
@@ -932,78 +938,59 @@ V.landing = {
       <p class="muted" style="margin:6px 0 18px">אין צורך שכל הוועד יירשם. מספיק אחד, והדיירים רק נכנסים לקישור.</p>
       <div style="max-width:420px;margin:0 auto">${authBlock('committee')}</div>
     </section>
-    <footer class="lp-foot">CleanEilat היא פלטפורמה טכנולוגית שמחברת בין בניינים, בעלי דירות ונותני שירות עצמאיים.<br><a href="terms.html">תנאי שימוש</a> · <a href="privacy.html">מדיניות פרטיות</a></footer>
+    <footer class="lp-foot">CleanEilat היא פלטפורמה טכנולוגית שמחברת בין ועדי בית ודיירים לבין נותני שירות עצמאיים. ההתקשרות והתשלום הם ישירות ביניהם.<br><a href="terms.html">תנאי שימוש</a> · <a href="privacy.html">מדיניות פרטיות</a></footer>
   </div>`;
   },
   html(){
-    S.lpAud ??= ['host','committee','cleaner'].includes(qs.get('for')) ? qs.get('for') : 'committee';
-    if (S.lpAud === 'committee') return this.committee();
-    const host = S.lpAud === 'host';
-    const role = host ? 'host' : 'cleaner';
-    const steps = host
-      ? [['נרשמים עם Google','החודש הראשון חינם, בלי כרטיס אשראי.'], ['מוסיפים דירה','מדביקים את קישור יומן ה-Airbnb, וכל צ׳ק-אאוט יוצר ניקיון לבד.'], ['בוחרים מנקה','מתוך רשימת המנקים באילת, לפי מחיר ודירוג.'], ['מאשרים ומשלמים','רואים 4 תמונות סיום, מאשרים ומשלמים למנקה ישירות.']]
-      : [['נרשמים עם Google','בלי סיסמאות, שנייה וזה בפנים.'], ['קובעים מחירון','מחיר לכל גודל דירה, ואיך מעבירים לך כסף.'], ['אימות זהות ועסק','צילום ת״ז ואישור עוסק. אחרי האישור מופיעים ברשימה.'], ['מקבלים עבודות','בעלי דירות פונים אליך, ואת/ה מאשר/ת מה שמתאים.']];
-    const perks = host
-      ? [[ICON.cal,'ניקיון לכל צ׳ק-אאוט','היומן של Airbnb או Booking מסתנכרן אוטומטית כל 3 שעות. הזמנה חדשה יוצרת ניקיון, ביטול מבטל אותו.'],
-         [ICON.cam,'רואים הכול מהנייד','מתי המנקה הגיע/ה, תמונות מצב לפני הניקיון ו-4 תמונות סיום לפני שהאורחים נכנסים.'],
-         [ICON.coins,'הכסף לא עובר דרכנו','משלמים למנקה ישירות, בביט או בהעברה. לנו משלמים רק מנוי על התוכנה.']]
-      : [[ICON.coins,'את/ה קובע/ת את המחיר','המחירון שלך מוצג לבעלי הדירות, וכל עבודה מגיעה עם המחיר שקבעת.'],
-         [ICON.wallet,'בלי עמלה','בעל הדירה משלם לך ישירות. אנחנו לא לוקחים אחוזים מהעבודה.'],
-         [ICON.cam,'תיעוד שמגן עליך','צילום מצב בכניסה לדירה. אף אחד לא יאשים אותך במשהו שאורח שבר.']];
+    S.lpAud ??= qs.get('for') === 'cleaner' ? 'cleaner' : 'committee';
+    if (S.lpAud !== 'cleaner') { S.lpAud = 'committee'; return this.committee(); }
+    const steps = [['נרשמים עם Google','בלי סיסמאות, שנייה וזה בפנים.'], ['פרטים ותשלום','כמה מילים עליך, ואיך מעבירים לך כסף.'], ['אימות זהות ועסק','צילום ת״ז ואישור עוסק. אחרי האישור מופיעים ברשימה.'], ['מקבלים בניינים','ועדי בית פונים אליך, ואת/ה מאשר/ת מה שמתאים.']];
+    const perks = [[ICON.cal,'עבודה קבועה','בניין הוא לקוח קבוע: ניקיון שבועי או פעמיים בשבוע, באותן שעות.'],
+      [ICON.wallet,'בלי עמלה','ועד הבית משלם לך ישירות, במחיר שסיכמתם. אנחנו לא לוקחים אחוזים מהעבודה.'],
+      [ICON.cam,'התיעוד מדבר בשבילך','4 תמונות בסוף כל ניקיון. הדיירים רואים שהעבודה נעשתה, בלי ויכוחים.']];
     return `<div class="lp">
     <div class="lp-top"><span class="brand"><i aria-hidden="true"></i>CleanEilat</span><button class="btn sm ghost" style="background:#fff;box-shadow:none" data-act="demo">צפייה בהדגמה</button></div>
     ${lpSeg()}
     <div class="lp-grid">
       <section class="card hero-card">
-        <span class="tag gold">${host ? 'לבעלי דירות נופש באילת' : 'למנקים עצמאיים באילת'}</span>
-        <h1 style="margin-top:14px">${host ? 'הדירה מוכנה לאורחים, ואת/ה רואה את זה בטלפון.' : 'עבודה עצמאית בניקיון דירות נופש, במחיר שלך.'}</h1>
-        <p class="lead">${host ? 'מחברים את יומן ה-Airbnb, בוחרים מנקה ומקבלים תמונות של כל ניקיון. התשלום למנקה ישירות, בלי מתווך.' : 'בונים פרופיל עם מחירון, בעלי דירות מזמינים אותך, ואת/ה מאשר/ת רק מה שמתאים. התשלום ישירות אליך.'}</p>
-        ${authBlock(role)}
+        <span class="tag gold">למנקים ואנשי תחזוקה באילת</span>
+        <h1 style="margin-top:14px">עבודה קבועה בניקיון בנייני מגורים, ישירות מול ועדי הבית.</h1>
+        <p class="lead">ועדי בית בוחרים מנקה מהרשימה, מזמינים ניקיונות ומשלמים לך ישירות. התמונות בסוף כל ניקיון מראות לדיירים שהעבודה נעשתה.</p>
+        ${authBlock('cleaner')}
       </section>
       <div class="grid-cards">
-        ${host ? `<section class="card lime earn-demo" aria-label="דוגמה למסך בעל דירה">
-          <div class="earn-row"><span class="vbadge"><i>✓</i>מוכן לאורחים</span><span class="delta">היום</span></div>
-          <h3 style="font-size:20px;font-weight:700;margin-top:14px">הטרמינל, סוויטה 12</h3>
-          <div class="mini"><div><span>המנקה הגיע/ה</span><b class="num">11:04</b></div><div><span>סיום</span><b class="num">12:41</b></div></div>
-        </section>
-        <section class="card"><div class="card-h"><h3>${ICON.clock} מה רואים בזמן אמת</h3></div>
-          <ul class="rows">
-            <li class="rowi"><span class="ic">${ICON.cal}</span><span class="mid"><b>צ׳ק-אאוט ביומן</b><span>נוצר ניקיון אוטומטית</span></span></li>
-            <li class="rowi"><span class="ic orange">${ICON.broom}</span><span class="mid"><b>המנקה בדירה</b><span>שעת הגעה ותמונות מצב</span></span></li>
-            <li class="rowi"><span class="ic lime">${ICON.check}</span><span class="mid"><b>4 תמונות סיום</b><span>מאשרים בלחיצה</span></span></li>
-          </ul></section>`
-        : `<section class="card lime earn-demo" aria-label="דוגמה להצעת עבודה">
-          <div class="earn-row"><span class="vbadge"><i>✓</i>הצעה חדשה</span><span class="delta">${sizeName('1')}</span></div>
-          <h3 style="font-size:20px;font-weight:700;margin-top:14px">הטרמינל, סוויטה 12</h3>
-          <div class="mini"><div><span>מחר</span><b class="num" dir="ltr">11:00–15:00</b></div><div><span>המחיר שלך</span><b class="num">₪150</b></div></div>
+        <section class="card lime earn-demo" aria-label="דוגמה להצעת עבודה">
+          <div class="earn-row"><span class="vbadge"><i>✓</i>הצעת עבודה</span><span class="delta">ניקיון שבועי</span></div>
+          <h3 style="font-size:20px;font-weight:700;margin-top:14px">הדקל 11, אילת</h3>
+          <div class="mini"><div><span>יום ב׳</span><b class="num" dir="ltr">08:00–10:00</b></div><div><span>המחיר שסוכם</span><b class="num">₪220</b></div></div>
         </section>
         <section class="card"><div class="card-h"><h3>${ICON.list} ככה נראית עבודה</h3></div>
           <ul class="rows">
-            <li class="rowi"><span class="ic">${ICON.key}</span><span class="mid"><b>הגעתי לדירה</b><span>קוד הכניסה נפתח במקום</span></span></li>
-            <li class="rowi"><span class="ic orange">${ICON.cam}</span><span class="mid"><b>צילום לפני ואחרי</b><span>צ׳ק-ליסט ו-4 תמונות</span></span></li>
-            <li class="rowi"><span class="ic lime">${ICON.coins}</span><span class="mid"><b>בעל הדירה מאשר</b><span>ומשלם לך ישירות</span></span></li>
-          </ul></section>`}
+            <li class="rowi"><span class="ic">${ICON.key}</span><span class="mid"><b>הגעתי לבניין</b><span>קוד דלת הכניסה נפתח במקום</span></span></li>
+            <li class="rowi"><span class="ic orange">${ICON.cam}</span><span class="mid"><b>צ׳ק-ליסט ו-4 תמונות</b><span>לובי, מדרגות, מעלית וחדר אשפה</span></span></li>
+            <li class="rowi"><span class="ic lime">${ICON.coins}</span><span class="mid"><b>הוועד מאשר</b><span>ומשלם לך ישירות</span></span></li>
+          </ul></section>
       </div>
     </div>
     <h2 class="lp-sec-title">איך זה עובד</h2>
-    <ol class="steps">${steps.map(([b, s]) => `<li><div><b>${b}</b><span>${s}</span></div></li>`).join('')}</ol>
-    <h2 class="lp-sec-title">${host ? 'למה CleanEilat' : 'למה לעבוד דרכנו'}</h2>
+    <ol class="steps">${steps.map(([b, t]) => `<li><div><b>${b}</b><span>${t}</span></div></li>`).join('')}</ol>
+    <h2 class="lp-sec-title">למה לעבוד דרכנו</h2>
     <div class="grid-cards" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">
       ${perks.map(([ic, h, p]) => `<section class="card"><div class="card-h"><h3>${ic} ${h}</h3></div><p class="muted">${p}</p></section>`).join('')}
     </div>
     <section class="card lime" style="margin-top:12px;text-align:center;padding:30px 22px">
-      <h2 style="font-size:24px;letter-spacing:-.3px">${host ? 'החודש הראשון עלינו' : 'מתחילים עכשיו באילת'}</h2>
-      <p class="muted" style="margin:6px 0 18px">${host ? `אחרי זה ${money(S.cfg?.monthly_fee || 49)} לחודש לכל דירה. בלי התחייבות.` : 'המנקים הראשונים ברשימה הם הראשונים שבעלי הדירות רואים.'}</p>
-      <div style="max-width:420px;margin:0 auto">${authBlock(role)}</div>
+      <h2 style="font-size:24px;letter-spacing:-.3px">מתחילים עכשיו באילת</h2>
+      <p class="muted" style="margin:6px 0 18px">המנקים הראשונים ברשימה הם הראשונים שוועדי הבית רואים.</p>
+      <div style="max-width:420px;margin:0 auto">${authBlock('cleaner')}</div>
     </section>
-    <footer class="lp-foot">CleanEilat היא פלטפורמה טכנולוגית שמחברת בין בעלי דירות נופש למנקים עצמאיים. ההתקשרות והתשלום הם ישירות ביניהם.<br><a href="terms.html">תנאי שימוש</a> · <a href="privacy.html">מדיניות פרטיות</a></footer>
+    <footer class="lp-foot">CleanEilat היא פלטפורמה טכנולוגית שמחברת בין ועדי בית ודיירים לבין נותני שירות עצמאיים. ההתקשרות והתשלום הם ישירות ביניהם.<br><a href="terms.html">תנאי שימוש</a> · <a href="privacy.html">מדיניות פרטיות</a></footer>
   </div>`;
   }
 };
 
 /* ═════════════ onboarding ═════════════ */
 const Q_CLEANER = [
-  ['experience','ניסיון בניקיון דירות או מלונות',['אין עדיין','עד שנה','1–3 שנים','מעל 3 שנים']],
+  ['experience','ניסיון בניקיון',['אין עדיין','עד שנה','1–3 שנים','מעל 3 שנים']],
   ['days','באילו ימים נוח לך לעבוד?',['א','ב','ג','ד','ה','ו','ש'],true],
   ['car','ניידות',['יש לי רכב','בלי רכב']],
   ['source','איך שמעת עלינו?',['חבר/ה','פייסבוק','אינסטגרם','אחר']]
@@ -1021,7 +1008,8 @@ V.onboarding = {
   load(){
     const p = S.profile, o = S.ob;
     o.full_name ??= p.full_name || ''; o.phone ??= p.phone || '';
-    o.role ??= ['host','cleaner'].includes(p.desired_role) ? p.desired_role : (localStorage.getItem('ce_role') || null);
+    o.role ??= p.desired_role === 'cleaner' ? 'cleaner' : (['committee','cleaner'].includes(localStorage.getItem('ce_role')) ? localStorage.getItem('ce_role') : null);
+    if (o.role === 'host') o.role = null;   // vacation-host sign-up is frozen
     o.prices ??= {...(p.prices || {})}; o.payment_info ??= p.payment_info || ''; o.bio ??= p.bio || '';
     if (o.role === 'committee' && !o.found) CHG.kSearch();
   },
@@ -1033,13 +1021,12 @@ V.onboarding = {
         <h1 style="font-size:24px">הבקשה בבדיקה</h1>
         <p class="muted" style="margin-top:6px">קיבלנו את הפרטים והמסמכים. בדרך כלל מאשרים תוך יום עסקים.</p></section>
       <section class="card"><div class="card-h"><h3>מה קורה עכשיו</h3></div><ul class="perks" style="margin:0">
-        <li>בודקים את תעודת הזהות ואישור העוסק.</li><li>אחרי האישור, הפרופיל והמחירון שלך מופיעים לבעלי הדירות.</li><li>הכניסה הבאה נפתחת ישר למסך העבודות.</li></ul></section>
+        <li>בודקים את תעודת הזהות ואישור העוסק.</li><li>אחרי האישור, הפרופיל שלך מופיע לוועדי הבית.</li><li>הכניסה הבאה נפתחת ישר למסך העבודות.</li></ul></section>
       <button class="btn ghost" style="margin-top:12px;background:#fff;box-shadow:none" data-act="recheck">בדיקה אם אושרתי</button></main>`;
     if (!o.role) return topbar() + `<main class="shell">
       <div class="hello"><h1>איך תשתמש/י ב-CleanEilat?</h1><p>אפשר לשנות אחר כך דרך התמיכה.</p></div>
-      <button class="card" style="width:100%;text-align:right;border:0;margin-bottom:12px" data-act="obRole" data-v="host"><div class="card-h"><h3>${ICON.pool} יש לי דירות נופש</h3></div><p class="muted">מחברים יומן Airbnb, בוחרים מנקה ומאשרים כל ניקיון לפי תמונות.</p></button>
       <button class="card" style="width:100%;text-align:right;border:0;margin-bottom:12px" data-act="obRole" data-v="committee"><div class="card-h"><h3>${ICON.key} אני בוועד הבית</h3></div><p class="muted">דף שקוף לדיירים: ניקיונות עם תמונות, קבלות והצעות מחיר. חינם.</p></button>
-      <button class="card" style="width:100%;text-align:right;border:0" data-act="obRole" data-v="cleaner"><div class="card-h"><h3>${ICON.broom} אני מנקה עצמאי/ת</h3></div><p class="muted">קובעים מחירון, מקבלים עבודות מבעלי דירות ומקבלים תשלום ישירות.</p></button></main>`;
+      <button class="card" style="width:100%;text-align:right;border:0" data-act="obRole" data-v="cleaner"><div class="card-h"><h3>${ICON.broom} אני מנקה עצמאי/ת</h3></div><p class="muted">ניקיון ותחזוקה של בנייני מגורים. ועדי בית פונים אליך, והתשלום ישירות אליך.</p></button></main>`;
     const basics = `<label class="f"><span>שם מלא</span><input class="inp" data-bind="ob.full_name" value="${esc(o.full_name)}" autocomplete="name" required></label>
       <label class="f"><span>טלפון נייד</span><input class="inp" data-bind="ob.phone" value="${esc(o.phone)}" type="tel" inputmode="tel" autocomplete="tel" dir="ltr" placeholder="050-0000000" required></label>`;
     const agree = txt => `<div class="checks"><label><input type="checkbox" data-bind="ob.agree" ${o.agree ? 'checked' : ''}><span>${txt} <a href="terms.html" target="_blank" rel="noopener">תנאי השימוש</a>.</span></label></div>`;
@@ -1062,7 +1049,7 @@ V.onboarding = {
         ${agree('קראתי ואני מסכים/ה ל')}
         <div class="row" style="flex-wrap:nowrap">${p.desired_role ? '' : `<button class="btn ghost sm" data-act="obRole" data-v="">שינוי</button>`}<button class="btn lagoon" style="flex:1" data-act="obSubmit" ${o.sending ? 'disabled' : ''}>${o.sending ? 'פותח חשבון…' : 'פתיחת חשבון, חודש ראשון חינם'}</button></div>
       </section></main>`;
-    const steps = ['קצת עליך','המחירון שלך','אימות זהות ועסק'];
+    const steps = ['קצת עליך','פרופיל ותשלום','אימות זהות ועסק'];
     let body = '';
     if (o.step === 0) body = `<section class="card">
       ${p.status === 'rejected' ? `<div class="alert red" style="margin-top:0"><b>הבקשה הקודמת לא אושרה.</b> ${esc(p.rejection_reason || '')} אפשר לעדכן ולשלוח שוב.</div>` : ''}
@@ -1073,9 +1060,8 @@ V.onboarding = {
       </div></div>`).join('')}
       <div class="row" style="flex-wrap:nowrap">${p.desired_role ? '' : `<button class="btn ghost sm" data-act="obRole" data-v="">שינוי</button>`}<button class="btn lagoon" style="flex:1" data-act="obNext">המשך</button></div></section>`;
     if (o.step === 1) body = `<section class="card">
-      <p class="muted" style="margin-bottom:14px">המחיר לניקיון אחד בין אורחים. בעלי הדירות רואים את המחירון לפני שהם פונים אליך. אפשר לשנות בכל רגע.</p>
-      <div class="grid2">${SIZES.map(([k, l]) => `<label class="f"><span>${l} (₪)</span><input class="inp" type="number" min="0" inputmode="numeric" data-bind="ob.prices.${k}" value="${esc(o.prices[k] ?? '')}" placeholder="—"></label>`).join('')}</div>
-      <label class="f"><span>איך מעבירים לך תשלום</span><input class="inp" data-bind="ob.payment_info" value="${esc(o.payment_info)}" placeholder="למשל: ביט 050-0000000 או פרטי חשבון"><small class="muted" style="display:block;margin-top:4px">מוצג רק לבעלי דירות שאישרת לעבוד איתם.</small></label>
+      <p class="muted" style="margin-bottom:14px">ועדי הבית רואים את הפרופיל שלך לפני שהם פונים אליך. את המחיר לכל בניין מסכמים ישירות מול הוועד.</p>
+      <label class="f"><span>איך מעבירים לך תשלום</span><input class="inp" data-bind="ob.payment_info" value="${esc(o.payment_info)}" placeholder="למשל: ביט 050-0000000 או פרטי חשבון"><small class="muted" style="display:block;margin-top:4px">מוצג רק לוועדי בית שאישרת לעבוד איתם.</small></label>
       <label class="f"><span>כמה מילים עליך (לא חובה)</span><textarea class="inp" data-bind="ob.bio" placeholder="ניסיון, אזורים, מה חשוב לך בעבודה">${esc(o.bio)}</textarea></label>
       <div class="row" style="flex-wrap:nowrap">${back}<button class="btn lagoon" style="flex:1" data-act="obNext">המשך</button></div></section>`;
     if (o.step === 2) body = `<section class="card">
@@ -1113,7 +1099,7 @@ V.cleaner = {
     const d = S.data, t = S.taskId && d.tasks.find(x => x.id === S.taskId);
     const main = t ? this.detail(t) : ({today:this.today, pool:this.pool, earn:this.earn, profile:this.profile})[S.tab.c].call(this);
     const inbox = d.tasks.filter(isOffer).length + d.contacts.filter(c => c.side === 'host' && c.status === 'pending').length;
-    return topbar() + `<main class="shell">${main}</main>` + tabs([['today','בית','list', inbox || ''], ['pool','עבודות פתוחות','pool', d.pool.length || ''], ['earn','הכנסות','wallet'], ['profile','פרופיל','user']], 'c');
+    return topbar() + `<main class="shell">${main}</main>` + tabs([['today','בית','list', inbox || ''], ['earn','הכנסות','wallet'], ['profile','פרופיל','user']], 'c');
   },
   today(){
     const p = S.profile, d = S.data, td = today(), e = d.earn || {};
@@ -1122,7 +1108,7 @@ V.cleaner = {
     const reqs = d.contacts.filter(c => c.side === 'host' && c.status === 'pending');
     const todays = mine.filter(t => t.task_date <= td), open = todays.filter(t => t.status !== 'approved'), doneN = todays.length - open.length;
     const later = mine.filter(t => t.task_date > td);
-    const noPrices = !SIZES.some(([k]) => +p.prices?.[k] > 0);
+    const noPrices = false;   // per-size price list belongs to the frozen vacation module
     const icon = s => s === 'approved' ? `<span class="ic lime">${ICON.check}</span>` : ['arrived','in_progress','submitted','needs_fix'].includes(s) ? `<span class="ic orange">${ICON.broom}</span>` : `<span class="ic">${ICON.key}</span>`;
     const row = t => { const a = t.apartment || {};
       return `<li><button class="rowi" data-act="openTask" data-id="${t.id}">${icon(t.status)}
@@ -1135,23 +1121,23 @@ V.cleaner = {
         <div class="big num" style="margin:6px 0 16px">${money(e.total)}</div>
         <div class="row" style="flex-wrap:nowrap">
           <button class="btn sm" data-act="tab" data-key="c" data-id="earn">לפירוט</button><span style="flex:1"></span>
-          <button class="circle" data-act="tab" data-key="c" data-id="pool" aria-label="לעבודות הפתוחות">${ICON.arrow}</button>
+          <button class="circle" data-act="tab" data-key="c" data-id="earn" aria-label="לפירוט ההכנסות">${ICON.arrow}</button>
         </div>
       </section>
       <div class="grid-cards two" style="margin-top:12px">
         <section class="card lime" style="padding:16px"><span class="lbl-s" style="color:rgba(31,59,23,.7)">ניקיונות שאושרו</span>
           <div class="num" style="font-size:26px;font-weight:600;margin-top:4px">${+e.count || 0}</div><span class="delta" style="margin-top:8px">החודש</span></section>
         <section class="card" style="padding:16px"><span class="lbl-s">עוד לא שולם לך</span>
-          <div class="num" style="font-size:26px;font-weight:600;margin-top:4px">${money(e.unpaid)}</div><span class="tag" style="margin-top:8px">ישירות מבעלי הדירות</span></section>
+          <div class="num" style="font-size:26px;font-weight:600;margin-top:4px">${money(e.unpaid)}</div><span class="tag" style="margin-top:8px">ישירות מהוועדים</span></section>
       </div>
-      ${reqs.length ? `<section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.users} בעלי דירות שרוצים לעבוד איתך</h3><span class="tag gold">${reqs.length}</span></div>
+      ${reqs.length ? `<section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.users} ועדי בית שרוצים לעבוד איתך</h3><span class="tag gold">${reqs.length}</span></div>
         <ul class="rows">${reqs.map(c => `<li class="rowi"><span class="av" style="width:40px;height:40px">${initials(c.full_name)}</span><span class="mid"><b>${esc(c.full_name)}</b><span>אחרי אישור יראה/תראה את הטלפון ופרטי התשלום שלך</span></span>
           <span class="end row" style="flex-wrap:nowrap;gap:6px"><button class="btn xs green" data-act="connResp" data-id="${c.id}" data-ok="1">אישור</button><button class="btn xs ghost" data-act="connResp" data-id="${c.id}">לא עכשיו</button></span></li>`).join('')}</ul></section>` : ''}
       ${offers.map(t => this.offerCard(t)).join('')}
       <section class="card" style="margin-top:12px">
         <div class="card-h"><h3>${ICON.list} היום, ${fmtShort(td)}</h3><span class="tag">${doneN}/${todays.length} הושלמו</span></div>
         ${todays.length ? `<ul class="rows">${open.concat(todays.filter(t => t.status === 'approved')).map(row).join('')}</ul>`
-          : `<div class="empty" style="padding:16px 6px"><p>אין ניקיונות היום.</p><button class="btn lagoon sm" data-act="tab" data-key="c" data-id="pool">לעבודות הפתוחות</button></div>`}
+          : `<div class="empty" style="padding:16px 6px"><p>אין ניקיונות היום.</p></div>`}
       </section>
       ${todays.length ? `<section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.clock} התקדמות היום</h3></div>${ring(doneN, todays.length, `${doneN}/${todays.length}`, 'דירות מוכנות')}</section>` : ''}
       ${later.length ? `<section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.cal} הימים הקרובים</h3></div><ul class="rows">${later.map(t => `<li><button class="rowi" data-act="openTask" data-id="${t.id}"><span class="ic">${ICON.cal}</span><span class="mid"><b>${esc(t.apartment?.name)}</b><span>${fmtShort(t.task_date)}, ${win(t)}</span></span><span class="end">${payOf(t) ? `<b class="num">${money(payOf(t))}</b>` : ''}</span></button></li>`).join('')}</ul></section>` : ''}`;
@@ -1175,7 +1161,7 @@ V.cleaner = {
       <h2>${esc(a.name)}</h2><p class="muted">${esc(a.complex?.name || '')}${a.complex?.name && a.address ? ', ' : ''}${esc(a.address || '')}</p>
       <div class="row between" style="margin-top:10px"><span class="win">${fmtShort(t.task_date)}, ${win(t)}${payOf(t) ? ` · <span class="num">${money(payOf(t))}</span>` : ''}</span>
       <span class="row" style="gap:6px">${host ? `<a class="btn sm ghost" href="tel:${esc(host.phone)}">התקשרות</a>` : ''}${a.address ? `<a class="btn sm ghost" href="https://waze.com/ul?q=${encodeURIComponent(a.address + ', אילת')}&navigate=yes" target="_blank" rel="noopener">Waze</a>` : ''}</span></div>
-      ${a.notes ? `<p class="small" style="margin-top:8px"><b>הערות מבעל הדירה:</b> ${esc(a.notes)}</p>` : ''}
+      ${a.notes ? `<p class="small" style="margin-top:8px"><b>הערות:</b> ${esc(a.notes)}</p>` : ''}
     </div>`;
     if (isOffer(t)) return head + this.offerCard(t);
     const stage = ['pending','requested'].includes(st) ? 1 : st === 'arrived' ? 2 : ['in_progress','needs_fix'].includes(st) ? 3 : 4;
@@ -1187,7 +1173,7 @@ V.cleaner = {
     const photosOk = SL.every(([k]) => dr.photos[k]);
     const canFinish = photosOk && checked === CK.length;
     return head + `
-    ${st === 'needs_fix' ? `<div class="alert orange"><b>בעל הדירה ביקש תיקון:</b> ${esc(t.admin_note || '')}<br>תקנו, החליפו את התמונות הרלוונטיות ושלחו שוב.</div>` : ''}
+    ${st === 'needs_fix' ? `<div class="alert orange"><b>התבקש תיקון:</b> ${esc(t.admin_note || '')}<br>תקנו, החליפו את התמונות הרלוונטיות ושלחו שוב.</div>` : ''}
     ${t.backup_cleaner === S.profile.id && stage < 3 ? `<div class="alert info">את/ה בכוננות גיבוי לדירה הזו. היכנס/י רק אם ביקשו ממך.</div>` : ''}
     <ol class="flow">
       <li class="${stage > 1 ? 'done' : 'cur'}"><h3>הגעה לדירה</h3>
@@ -1197,7 +1183,7 @@ V.cleaner = {
         ${t.arrived_at ? `<p class="muted small" style="margin-top:8px">הגעה נרשמה ב-${fmtTime(t.arrived_at)}</p>` : ''}
       </li>
       <li class="${stage > 2 ? 'done' : stage === 2 ? 'cur' : ''}"><h3>צילום מצב הדירה לפני הניקיון</h3>
-        ${stage === 2 ? `<p class="muted small" style="margin-bottom:10px">צלמו את הדירה כפי שמצאתם אותה, וכל נזק או בעיה. זה מגן עליך מול בעל הדירה.</p>
+        ${stage === 2 ? `<p class="muted small" style="margin-bottom:10px">צלמו את המקום כפי שמצאתם אותו, וכל נזק או בעיה. זה מגן עליך.</p>
           <div class="ph-grid">${dr.before.map((p, i) => `<div class="ph"><img data-p="${esc(p)}" alt="תמונת מצב ${i + 1}" data-act="zoom"><button class="x" data-act="rmBefore" data-id="${t.id}" data-i="${i}" aria-label="הסרת תמונה">×</button></div>`).join('')}
             ${dr.before.length < 8 ? addTile('before', dr.before.length ? 'עוד תמונה' : 'צילום מצב', !dr.before.length) : ''}</div>
           <label class="f" style="margin-top:12px"><span>נזקים או בעיות שמצאתי (לא חובה)</span><textarea class="inp" data-bind="draft.${t.id}.notes" placeholder="למשל: כוס שבורה במטבח, כתם על הספה">${esc(dr.notes)}</textarea></label>
@@ -1214,12 +1200,12 @@ V.cleaner = {
           <div class="ph-grid four">${SL.map(([k, l]) => dr.photos[k] && !busy(k)
             ? `<div class="ph"><img data-p="${esc(dr.photos[k])}" alt="${l}" data-act="zoom"><span class="lbl">${l}</span><button class="x" data-act="rmPhoto" data-id="${t.id}" data-k="${k}" aria-label="צילום מחדש">↻</button></div>`
             : addTile(k, l, true)).join('')}</div>
-          <div class="sticky-cta"><button class="btn green" data-act="finish" data-id="${t.id}" ${canFinish ? '' : 'disabled'}>סיום ושליחה לבעל הדירה</button>
-          <p class="hint">${canFinish ? (isBld(t) ? 'התמונות יוצגו לדיירים בדף הבניין.' : 'בעל הדירה יקבל את התמונות לאישור.') : `חסרים: ${[!photosOk && `${SL.filter(([k]) => !dr.photos[k]).length} תמונות`, checked < CK.length && `${CK.length - checked} סעיפים בצ׳ק-ליסט`].filter(Boolean).join(' ו-')}`}</p></div>`
+          <div class="sticky-cta"><button class="btn green" data-act="finish" data-id="${t.id}" ${canFinish ? '' : 'disabled'}>סיום ושליחה לאישור</button>
+          <p class="hint">${canFinish ? (isBld(t) ? 'התמונות יוצגו לדיירים בדף הבניין.' : 'התמונות יישלחו לאישור.') : `חסרים: ${[!photosOk && `${SL.filter(([k]) => !dr.photos[k]).length} תמונות`, checked < CK.length && `${CK.length - checked} סעיפים בצ׳ק-ליסט`].filter(Boolean).join(' ו-')}`}</p></div>`
         : stage === 4 ? `<div class="ph-grid four">${SL.map(([k, l]) => img(t.photos?.[k], l)).join('')}</div>
           <div class="alert ${st === 'approved' ? 'green' : 'info'}">${st === 'approved'
-            ? `בעל הדירה אישר את הניקיון${t.rating ? ` ודירג ${'★'.repeat(t.rating)}` : ''}. ${t.paid_at ? 'הוא סימן שהתשלום הועבר.' : `התשלום (${money(payOf(t))}) מגיע ממנו ישירות.`}`
-            : 'נשלח לבעל הדירה. הוא יאשר אחרי שיראה את התמונות.'}</div>` : ''}
+            ? `הניקיון אושר${t.rating ? ` עם דירוג ${'★'.repeat(t.rating)}` : ''}. ${t.paid_at ? 'סומן שהתשלום הועבר.' : payOf(t) ? `התשלום (${money(payOf(t))}) מגיע ישירות מהלקוח.` : ''}`
+            : 'נשלח לאישור. התמונות יאושרו אחרי שיראו אותן.'}</div>` : ''}
       </li>
     </ol>`;
   },
@@ -1240,9 +1226,9 @@ V.cleaner = {
     return `<section class="card lime">
         <div class="row between"><span class="lbl-s" style="color:rgba(31,59,23,.7)">הכנסות החודש</span><span class="delta">${+e.count || 0} ניקיונות</span></div>
         <div class="big num" style="margin:6px 0 4px">${money(e.total)}</div>
-        <div class="mini"><div><span>בעלי הדירות סימנו ששולם</span><b class="num">${money(e.paid)}</b></div><div><span>עוד לא שולם</span><b class="num">${money(e.unpaid)}</b></div></div>
+        <div class="mini"><div><span>סומן ששולם</span><b class="num">${money(e.paid)}</b></div><div><span>עוד לא שולם</span><b class="num">${money(e.unpaid)}</b></div></div>
       </section>
-      <div class="alert info">התשלום מגיע ישירות מבעל הדירה, לפי פרטי התשלום שבפרופיל שלך. CleanEilat לא מחזיקה את הכסף ולא לוקחת עמלה. את החשבונית/קבלה מוציאים לבעל הדירה בעצמך.</div>
+      <div class="alert info">התשלום מגיע ישירות מהוועד, לפי פרטי התשלום שבפרופיל שלך. CleanEilat לא מחזיקה את הכסף ולא לוקחת עמלה. את הקבלה מוציאים לוועד בעצמך.</div>
       <section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.check} ניקיונות שאושרו</h3></div>
         ${h.length ? `<ul class="rows">${h.map(t => `<li class="rowi"><span class="ic ${t.paid_at ? 'lime' : 'orange'}">${t.paid_at ? ICON.check : ICON.clock}</span>
           <span class="mid"><b>${esc(t.apartment?.name)}</b><span>${fmtShort(t.task_date)}${t.rating ? ` · ${'★'.repeat(t.rating)}` : ''}${t.paid_at ? ' · שולם' : ' · לא שולם עדיין'}</span></span>
@@ -1253,17 +1239,15 @@ V.cleaner = {
     return `<section class="card"><div class="person"><span class="av">${p.avatar_url ? `<img src="${esc(p.avatar_url)}" alt="">` : initials(p.full_name)}</span>
         <div class="info"><div class="row between"><h3>${esc(p.full_name)}</h3>${stars(p.rating, p.rating_count)}</div><div class="kv"><span>${esc(p.email || '')}</span>${p.business_type ? `<span>${BIZ[p.business_type]}</span>` : ''}</div></div></div></section>
       <form class="card" style="margin-top:12px" data-submit="profile">
-        <div class="card-h"><h3>${ICON.user} הפרופיל שבעלי הדירות רואים</h3></div>
+        <div class="card-h"><h3>${ICON.user} הפרופיל שוועדי הבית רואים</h3></div>
         <div class="grid2"><label class="f"><span>שם מלא</span><input class="inp" name="full_name" value="${esc(p.full_name || '')}" required></label>
         <label class="f"><span>טלפון</span><input class="inp" name="phone" type="tel" dir="ltr" value="${esc(p.phone || '')}" required></label></div>
         <label class="f"><span>אזור</span><input class="inp" name="area" value="${esc(p.area || '')}" placeholder="למשל: שחמון, מרכז העיר"></label>
         <label class="f"><span>כמה מילים עליך</span><textarea class="inp" name="bio">${esc(p.bio || '')}</textarea></label>
-        <span class="flabel">מחירון לניקיון (₪)</span>
-        <div class="grid2">${SIZES.map(([k, l]) => `<label class="f"><span>${l}</span><input class="inp" type="number" min="0" inputmode="numeric" name="price_${k}" value="${esc(pr[k] ?? '')}" placeholder="—"></label>`).join('')}</div>
-        <label class="f"><span>איך מעבירים לך תשלום</span><input class="inp" name="payment_info" value="${esc(p.payment_info || '')}" placeholder="ביט 050-0000000"><small class="muted" style="display:block;margin-top:4px">מוצג רק לבעלי דירות שאישרת.</small></label>
+        <label class="f"><span>איך מעבירים לך תשלום</span><input class="inp" name="payment_info" value="${esc(p.payment_info || '')}" placeholder="ביט 050-0000000"><small class="muted" style="display:block;margin-top:4px">מוצג רק לוועדי בית שאישרת.</small></label>
         <button class="btn lagoon" type="submit">שמירה</button>
       </form>
-      <section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.check} הנהלים</h3></div><ul class="perks" style="margin:0"><li>עמידה בחלון הזמנים שבעל הדירה קבע.</li><li>צילום נזקים לפני תחילת העבודה.</li><li>4 תמונות סיום וצ׳ק-ליסט מלא בכל ניקיון.</li></ul></section>
+      <section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.check} הנהלים</h3></div><ul class="perks" style="margin:0"><li>עמידה בחלון הזמנים שסוכם.</li><li>צילום נזקים לפני תחילת העבודה.</li><li>4 תמונות סיום וצ׳ק-ליסט מלא בכל ניקיון.</li></ul></section>
       <div class="row" style="margin-top:12px"><a class="btn ghost sm" style="background:#fff" href="terms.html">תנאי שימוש</a><button class="btn ghost sm" style="background:#fff" data-act="signout">יציאה מהחשבון</button></div>`;
   }
 };
@@ -1347,7 +1331,7 @@ V.host = {
     const others = d.dir.filter(c => !ids.has(c.id));
     const pCard = (c, actions) => `<div class="card person"><span class="av">${c.avatar_url ? `<img src="${esc(c.avatar_url)}" alt="">` : initials(c.full_name)}</span><div class="info">
       <div class="row between"><h3>${esc(c.full_name)}</h3>${stars(c.rating, c.rating_count)}</div>
-      <div class="kv">${c.area ? `<span>${esc(c.area)}</span>` : ''}<span>${priceLine(c.prices)}</span></div>
+      <div class="kv">${c.area ? `<span>${esc(c.area)}</span>` : ''}${S.view === V.committee ? '' : `<span>${priceLine(c.prices)}</span>`}</div>
       ${c.bio ? `<p class="small muted" style="margin-top:6px">${esc(c.bio)}</p>` : ''}${actions}</div></div>`;
     return `<div class="sec-h" style="margin-top:0"><h2>המנקים שלי</h2><span class="muted">${mine.filter(c => c.status === 'accepted').length}</span></div>
       ${mine.length ? mine.map(c => pCard(c, c.status === 'accepted'
@@ -1609,19 +1593,19 @@ const nfcLog = () => { const el = document.getElementById('nfcLog'); if (el) el.
 V.admin = {
   async load(){
     S.tab.a ??= 'over';
-    const [profiles, aps, complexes, day, qa, settings, over, tags] = await Promise.all([
-      api.profiles(), api.apartments(), api.complexes(), api.tasksOn(S.adminDate), api.qaTasks(), api.settings(), api.rpc('admin_overview'), api.tags()
+    const [profiles, aps, complexes, day, qa, settings, tags, bldMonth] = await Promise.all([
+      api.profiles(), api.apartments(), api.complexes(), api.tasksOn(S.adminDate), api.qaTasks(), api.settings(), api.tags(), api.bldMonth()
     ]);
-    Object.assign(S.data, {profiles, aps, complexes, day, qa, settings, over, tags}); S.cfg = settings;
+    Object.assign(S.data, {profiles, aps, complexes, day, qa, settings, tags, bldMonth}); S.cfg = settings;
   },
   name(id){ return S.data.profiles.find(p => p.id === id)?.full_name || '—'; },
   html(){
     const d = S.data;
     const pend = d.profiles.filter(p => p.status === 'submitted').length;
-    const qaN = d.qa.filter(t => t.status === 'submitted' && !t.apartment?.host_id).length;
+    const qaN = d.qa.filter(t => t.status === 'submitted' && !t.apartment?.host_id && t.apartment?.kind === 'building').length;
     if (S.tab.a !== 'nfc' && NFC.running) { NFC.ctrl?.abort(); NFC.running = false; }
     const main = ({over:this.over, board:this.board, qa:this.qaView, people:this.people, apts:this.apts, bld:this.bld, nfc:this.nfc})[S.tab.a].call(this);
-    return topbar() + `<main class="shell wide">` + tabs([['over','סקירה','coins'], ['board','ניקיונות','cal'], ['qa','תמונות','eye', qaN || ''], ['people','משתמשים','users', pend || ''], ['apts','דירות','pool'], ['bld','בניינים','key']], 'a', true) + main + `</main>`;
+    return topbar() + `<main class="shell wide">` + tabs([['over','סקירה','coins'], ['bld','בניינים','key'], ['board','ניקיונות','cal'], ['qa','תמונות','eye', qaN || ''], ['people','משתמשים','users', pend || '']], 'a', true) + main + `</main>`;
   },
   bld(){
     const d = S.data, bs = d.aps.filter(a => a.kind === 'building' && !a.deleted_at);
@@ -1691,40 +1675,38 @@ V.admin = {
         ${tags.length ? `<ul class="rows">${tags.map(t => `<li class="rowi"><span class="mid"><b dir="ltr">${esc(t.tag_id)}</b></span>${t.locked ? '<span class="end tag">נעולה</span>' : ''}</li>`).join('')}</ul>` : '<p class="muted small">עוד לא נצרבו מדבקות לבניין הזה.</p>'}</section>`}`;
   },
   over(){
-    const o = S.data.over || {}, s = S.data.settings;
+    const d = S.data, bs = d.aps.filter(a => a.kind === 'building' && !a.deleted_at), ids = new Set(bs.map(b => b.id));
+    const act = bs.filter(b => b.connection_status === 'active').length, pend = bs.length - act;
+    const tags = (d.tags || []).filter(t => ids.has(t.building_id)).length, votes = bs.reduce((x, b) => x + (b.interest_count || 0), 0);
+    const committees = d.profiles.filter(p => p.role === 'host' && p.onboarding?.kind === 'committee').length;
+    const cleaners = d.profiles.filter(p => p.role === 'cleaner' && p.status === 'approved').length, waiting = d.profiles.filter(p => p.status === 'submitted').length;
     return `<div class="stats">
-        <div class="kpi"><b>${o.hosts ?? 0}</b><span>בעלי דירות</span></div>
-        <div class="kpi"><b>${o.apartments ?? 0}</b><span>דירות פעילות</span></div>
-        <div class="kpi"><b>${o.cleaners ?? 0}</b><span>מנקים מאושרים</span></div>
-        <div class="kpi"><b style="color:${o.pending_cleaners ? 'var(--orange)' : 'inherit'}">${o.pending_cleaners ?? 0}</b><span>ממתינים לאימות</span></div>
+        <div class="kpi"><b style="color:var(--green)">${act}</b><span>בניינים פעילים</span></div>
+        <div class="kpi"><b style="color:${pend ? 'var(--orange)' : 'inherit'}">${pend}</b><span>בניינים ממתינים לדיירים</span></div>
+        <div class="kpi"><b>${tags}</b><span>מדבקות NFC פעילות</span></div>
+        <div class="kpi"><b>${d.bldMonth ?? 0}</b><span>ניקיונות בניין החודש</span></div>
       </div>
       <div class="stats">
-        <div class="kpi"><b>${o.paying_apartments ?? 0}</b><span>דירות במנוי משלם</span></div>
-        <div class="kpi"><b style="color:var(--green)">${money(o.mrr)}</b><span>הכנסה חודשית ממנויים</span></div>
-        <div class="kpi"><b>${o.cleanings_month ?? 0}</b><span>ניקיונות שאושרו החודש</span></div>
-        <div class="kpi"><b>${o.synced_apartments ?? 0}</b><span>דירות עם יומן מחובר</span></div>
+        <div class="kpi"><b>${votes}</b><span>דיירים שסימנו עניין</span></div>
+        <div class="kpi"><b>${committees}</b><span>ועדי בית רשומים</span></div>
+        <div class="kpi"><b>${cleaners}</b><span>מנקים מאושרים</span></div>
+        <div class="kpi"><b style="color:${waiting ? 'var(--orange)' : 'inherit'}">${waiting}</b><span>ממתינים לאימות</span></div>
       </div>
-      <div class="alert info">הכסף על הניקיונות עובר ישירות מבעל הדירה למנקה. ההכנסה של CleanEilat היא רק מנוי לדירה. כרגע אין סליקה, ומסמנים מנוי כ״פעיל״ ידנית בלשונית משתמשים.</div>
-      <form class="card" style="margin-top:12px" data-submit="settings"><div class="card-h"><h3>${ICON.coins} מנוי</h3></div><div class="grid2">
-        <label class="f"><span>מחיר לדירה לחודש (₪)</span><input class="inp" name="monthly_fee" type="number" min="0" value="${s.monthly_fee ?? 49}"></label>
-        <label class="f"><span>ימי ניסיון לבעל דירה חדש</span><input class="inp" name="trial_days" type="number" min="0" value="${s.trial_days ?? 30}"></label></div>
-        <button class="btn sm lagoon" type="submit">שמירה</button></form>`;
+      <div class="row" style="margin-top:12px;gap:8px"><button class="btn sm lagoon" data-act="bldForm">בניין חדש</button><button class="btn sm ghost" style="background:#fff" data-act="nfcOpen">צריבת NFC</button></div>`;
   },
   board(){
     const d = S.data, td = S.adminDate;
     const cleaners = d.profiles.filter(p => p.role === 'cleaner' && p.status === 'approved').sort((a, b) => (b.is_verified - a.is_verified) || String(a.full_name).localeCompare(b.full_name, 'he'));
     const opts = (sel, excl) => `<option value="">— לא משובץ —</option>` + cleaners.filter(c => c.id !== excl).map(c => `<option value="${c.id}" ${c.id === sel ? 'selected' : ''}>${c.is_verified ? '★ ' : ''}${esc(c.full_name)}</option>`).join('');
-    const tasks = d.day.filter(t => t.status !== 'cancelled');
+    const tasks = d.day.filter(t => t.status !== 'cancelled' && t.apartment?.kind === 'building');
     const groups = {};
-    tasks.forEach(t => { const k = t.apartment?.complex?.name || 'ללא מתחם'; (groups[k] ??= []).push(t); });
+    tasks.forEach(t => { const k = t.apartment?.city || 'בניינים'; (groups[k] ??= []).push(t); });
     const order = Object.keys(groups).sort((a, b) => (d.complexes.find(c => c.name === a)?.sort ?? 99) - (d.complexes.find(c => c.name === b)?.sort ?? 99));
     const missing = d.aps.filter(a => a.active && a.kind !== 'building' && !tasks.some(t => t.apartment_id === a.id));
     const cnt = f => tasks.filter(f).length;
     return `<div class="toolbar">
         <div class="datebox"><button data-act="day" data-n="1" aria-label="יום קודם">›</button><input type="date" value="${td}" data-change="date" aria-label="תאריך"><button data-act="day" data-n="-1" aria-label="יום הבא">‹</button></div>
         <b>${fmtDate(td)}</b><span class="sp" style="flex:1"></span>
-        ${missing.length ? `<button class="btn sm lagoon" data-act="genDay">שיבוץ כל הדירות הפעילות (${missing.length})</button>` : ''}
-        ${d.aps.some(a => a.ical_url) ? `<button class="btn sm ghost" style="background:#fff" data-act="syncIcal">${ICON.cal.replace('<svg','<svg width="18" height="18"')} סנכרון Airbnb</button>` : ''}
         <button class="btn sm ghost" data-act="addTask">הוספת ניקיון</button>
       </div>
       <div class="stats">
@@ -1737,19 +1719,19 @@ V.admin = {
         ${groups[g].map(t => { const a = t.apartment || {}; const prem = a.is_premium || a.complex?.is_premium; const pc = d.profiles.find(p => p.id === t.primary_cleaner);
           const locked = ['in_progress','submitted','approved'].includes(t.status);
           return `<div class="slot ${t.status === 'requested' ? 'req' : ''}">
-            <div class="nm">${esc(a.name)}<small>${win(t)}${t.is_urgent ? ', דחוף' : ''}${t.is_extra ? ', הזמנת בעל הדירה' : ''}${t.source === 'ical' ? ', מיומן Airbnb' : ''}</small></div>
+            <div class="nm">${esc(a.name)}<small>${win(t)}${t.is_urgent ? ', דחוף' : ''}${t.is_extra ? ', הזמנה מיוחדת' : ''}${t.source === 'ical' ? ', מיומן Airbnb' : ''}</small></div>
             ${chip(t.status)}
             <span class="lblsel">מנקה ראשי</span><select class="${t.primary_cleaner ? '' : 'need'}" data-change="assign" data-id="${t.id}" data-f="primary_cleaner" ${locked ? 'disabled' : ''} aria-label="מנקה ראשי">${opts(t.primary_cleaner, t.backup_cleaner)}</select>
             <span class="lblsel">גיבוי (כוננות הקפצה)</span><select data-change="assign" data-id="${t.id}" data-f="backup_cleaner" ${locked ? 'disabled' : ''} aria-label="מנקה גיבוי">${opts(t.backup_cleaner, t.primary_cleaner)}</select>
             ${['pending','requested'].includes(t.status) ? `<button class="btn xs ghost" data-act="delTask" data-id="${t.id}" aria-label="ביטול ניקיון">ביטול</button>` : '<span></span>'}
             ${F('deposit') && prem && pc && !pc.is_verified ? `<p class="warn">דירת פרימיום משובצת למנקה לא מאומת/ת. כדאי להעדיף ★ מאומתים.</p>` : ''}
-            ${t.request_note ? `<p class="warn">הערת בעל הדירה: ${esc(t.request_note)}</p>` : ''}
+            ${t.request_note ? `<p class="warn">הערה: ${esc(t.request_note)}</p>` : ''}
           </div>`; }).join('')}</section>`).join('')
-        : `<div class="card empty"><h3>אין ניקיונות ביום הזה</h3><p>אפשר לשבץ בלחיצה את כל הדירות הפעילות, או להוסיף ניקיון בודד.</p></div>`}
-      <p class="muted small" style="margin-top:16px">${F('deposit') ? `★ מנקה מאומת/ת (פיקדון ${money(d.settings.deposit_amount)}). משימה בלי מנקה מופיעה בלוח הפתוח: למאומתים מיד, לשאר אחרי ${d.settings.pool_delay_hours} שעות, ודירות פרימיום למאומתים בלבד.` : 'משימה בלי מנקה מופיעה מיד בלוח הפתוח, וכל מנקה מאושר יכול לקחת אותה.'} ${d.aps.some(a => a.ical_url) ? 'יומן ה-Airbnb של הדירות מסתנכרן אוטומטית כל 3 שעות.' : ''}</p>`;
+        : `<div class="card empty"><h3>אין ניקיונות ביום הזה</h3><p>ועדי הבית מזמינים ניקיונות מהמסך שלהם. אפשר גם להוסיף ניקיון לבניין מכאן.</p></div>`}
+      <p class="muted small" style="margin-top:16px">${F('deposit') ? `★ מנקה מאומת/ת (פיקדון ${money(d.settings.deposit_amount)}). משימה בלי מנקה מופיעה בלוח הפתוח: למאומתים מיד, לשאר אחרי ${d.settings.pool_delay_hours} שעות, ודירות פרימיום למאומתים בלבד.` : 'משימה בלי מנקה מופיעה מיד בלוח הפתוח, וכל מנקה מאושר יכול לקחת אותה.'}</p>`;
   },
   qaView(){
-    const d = S.data, sub = d.qa.filter(t => t.status === 'submitted'), done = d.qa.filter(t => t.status === 'approved');
+    const d = {...S.data, qa:S.data.qa.filter(t => t.apartment?.kind === 'building')}, sub = d.qa.filter(t => t.status === 'submitted'), done = d.qa.filter(t => t.status === 'approved');
     const card = t => { const a = t.apartment || {}; const c = d.profiles.find(p => p.id === t.primary_cleaner);
       const pay = t.cleaner_pay ?? (c?.is_verified ? a.rate_max : a.rate_base);
       const mins = t.started_at && t.finished_at ? Math.round((new Date(t.finished_at) - new Date(t.started_at)) / 60000) : null;
@@ -1762,7 +1744,7 @@ V.admin = {
         <p class="small muted" style="margin:10px 0 6px">אחרי הניקיון</p>
         <div class="ph-grid four">${slotsOf(t).map(([k, l]) => img(t.photos?.[k], l)).join('')}</div>
         ${t.status === 'submitted' && !a.host_id ? `<div class="row" style="margin-top:14px;flex-wrap:nowrap"><button class="btn green" data-act="approve" data-id="${t.id}">אישור ניקיון</button><button class="btn orange sm" style="min-height:54px" data-act="fix" data-id="${t.id}">דרוש תיקון</button></div>`
-          : t.status === 'submitted' ? '<p class="muted small" style="margin-top:12px">ממתין לאישור בעל הדירה.</p>' : ''}
+          : t.status === 'submitted' ? '<p class="muted small" style="margin-top:12px">ממתין לאישור הוועד.</p>' : ''}
       </article>`; };
     return `<div class="row between" style="margin-bottom:12px"><h2 style="font-size:22px;font-weight:800">ניקיונות שהסתיימו</h2><span class="muted small">בעל הדירה מאשר. כאן מאשרים רק דירות בלי בעל דירה רשום.</span></div>
       ${sub.length ? `<div class="qa">${sub.map(card).join('')}</div>` : `<div class="card empty"><h3>אין ניקיונות שמחכים</h3><p>ניקיונות שיסתיימו יופיעו כאן עם התמונות, מיד כשהמנקה לוחץ על סיום.</p></div>`}
@@ -1775,27 +1757,26 @@ V.admin = {
     const ans = o => Object.entries(o || {}).map(([k, v]) => `<span>${esc(Array.isArray(v) ? v.join(', ') : v)}</span>`).join('');
     return `<div class="row between" style="margin-bottom:12px"><h2 style="font-size:22px;font-weight:800">בקשות הצטרפות</h2><span class="muted">${pend.length}</span></div>
       ${pend.length ? pend.map(p => `<div class="card person"><span class="av">${initials(p.full_name)}</span><div class="info">
-        <div class="row between"><h3>${esc(p.full_name)}</h3><span class="tag">${p.desired_role === 'host' ? 'בעל דירה' : 'מנקה'}</span></div>
+        <div class="row between"><h3>${esc(p.full_name)}</h3><span class="tag">${p.desired_role === 'host' ? 'ועד בית' : 'מנקה'}</span></div>
         <div class="kv"><span dir="ltr">${esc(p.phone || '')}</span><span>${esc(p.email || '')}</span>${p.business_type ? `<span>${BIZ[p.business_type]} <b dir="ltr">${esc(p.business_number || '')}</b></span>` : ''}${p.referred_by ? `<span>הופנה ע״י <b>${esc(this.name(p.referred_by))}</b></span>` : ''}</div>
         <div class="kv" style="color:var(--muted)">${ans(p.onboarding)}</div>
         <div class="row" style="margin-top:12px">
           ${p.id_doc_path ? `<button class="btn xs ghost" data-act="kyc" data-p="${esc(p.id_doc_path)}">תעודת זהות</button>` : ''}
           ${p.business_doc_path ? `<button class="btn xs ghost" data-act="kyc" data-p="${esc(p.business_doc_path)}">אישור עוסק</button>` : ''}
           <span style="flex:1"></span>
-          <button class="btn xs green" data-act="review" data-id="${p.id}" data-ok="1">אישור כ${p.desired_role === 'host' ? 'בעל דירה' : 'מנקה'}</button>
+          <button class="btn xs green" data-act="review" data-id="${p.id}" data-ok="1">אישור כ${p.desired_role === 'host' ? 'ועד בית' : 'מנקה'}</button>
           <button class="btn xs ghost" data-act="review" data-id="${p.id}">דחייה</button></div></div></div>`).join('')
-        : `<div class="card"><p class="muted">אין בקשות חדשות. שלחו את קישור האתר למנקים ולבעלי דירות כדי להתחיל לגייס.</p></div>`}
+        : `<div class="card"><p class="muted">אין בקשות חדשות. שלחו את קישור האתר למנקים ולוועדי בית כדי להתחיל לגייס.</p></div>`}
       <div class="two-col" style="margin-top:8px"><section><div class="sec-h"><h2>מנקים</h2><span class="muted">${cleaners.length}</span></div>
         ${cleaners.map(p => `<div class="card person"><span class="av">${initials(p.full_name)}</span><div class="info">
           <div class="row between"><h3>${esc(p.full_name)}</h3>${p.status !== 'approved' ? chip('pending') : stars(p.rating, p.rating_count)}</div>
-          <div class="kv"><span>${priceLine(p.prices)}</span>${p.area ? `<span>${esc(p.area)}</span>` : ''}<span dir="ltr">${esc(p.phone || '')}</span></div>
+          <div class="kv">${p.area ? `<span>${esc(p.area)}</span>` : ''}<span dir="ltr">${esc(p.phone || '')}</span>${p.payment_info ? `<span>תשלום: ${esc(p.payment_info)}</span>` : ''}</div>
           ${!F('deposit') ? '' : `<div class="row" style="margin-top:10px"><label class="small muted">פיקדון</label>
             <select class="inp" style="min-height:38px;width:auto;padding:0 8px" data-change="deposit" data-id="${p.id}">${[['none','לא הופקד'], ['requested','ביקש/ה להצטרף'], ['paid','הופקד'], ['refunded','הוחזר']].map(([v, l]) => `<option value="${v}" ${p.deposit_status === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
             <button class="btn xs ${p.is_verified ? 'ghost' : 'lagoon'}" data-act="verify" data-id="${p.id}" data-v="${p.is_verified ? '' : 1}">${p.is_verified ? 'ביטול אימות' : 'סמן כמאומת'}</button></div>`}</div></div>`).join('') || '<p class="muted">אין עדיין מנקים.</p>'}
-      </section><section><div class="sec-h"><h2>בעלי דירות</h2><span class="muted">${hosts.length}</span></div>
-        ${hosts.map(p => `<div class="card person"><span class="av">${initials(p.full_name)}</span><div class="info"><h3>${esc(p.full_name)}${p.onboarding?.kind === 'committee' ? ' <span class="tag">ועד בית</span>' : ''}</h3>
-          <div class="kv"><span>${d.aps.filter(a => a.host_id === p.id).length} דירות</span><span dir="ltr">${esc(p.phone || '')}</span><span>${esc(p.email || '')}</span>${p.trial_ends ? `<span>ניסיון עד ${fmtShort(p.trial_ends)}</span>` : ''}</div>
-          <div class="row" style="margin-top:10px"><label class="small muted" for="sub-${p.id}">מנוי</label><select id="sub-${p.id}" class="inp" style="min-height:38px;width:auto;padding:0 8px" data-change="sub" data-id="${p.id}">${[['trial','ניסיון'], ['active','פעיל, משלם'], ['past_due','לא שילם'], ['cancelled','בוטל']].map(([v, l]) => `<option value="${v}" ${p.sub_status === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div></div></div>`).join('') || '<p class="muted">אין עדיין בעלי דירות.</p>'}
+      </section><section><div class="sec-h"><h2>ועדי בית</h2><span class="muted">${hosts.filter(p => p.onboarding?.kind === 'committee').length}</span></div>
+        ${hosts.filter(p => p.onboarding?.kind === 'committee').map(p => `<div class="card person"><span class="av">${initials(p.full_name)}</span><div class="info"><h3>${esc(p.full_name)}${p.onboarding?.kind === 'committee' ? ' <span class="tag">ועד בית</span>' : ''}</h3>
+          <div class="kv"><span>${d.aps.filter(a => a.host_id === p.id && a.kind === 'building' && !a.deleted_at).map(a => esc(a.address)).join(', ') || 'עוד בלי בניין'}</span><span dir="ltr">${esc(p.phone || '')}</span><span>${esc(p.email || '')}</span></div></div></div>`).join('') || '<p class="muted">אין עדיין בעלי דירות.</p>'}
       </section></div>`;
   },
   apts(){
@@ -1879,7 +1860,6 @@ const ACT = {
     const o = S.ob;
     if (o.step === 0) { const e = validBasics(o); if (e) return toast(e, 'err'); }
     if (o.step === 1) {
-      if (!SIZES.some(([k]) => +o.prices?.[k] > 0)) return toast('נא לקבוע מחיר לפחות לגודל דירה אחד', 'err');
       if (!(o.payment_info || '').trim()) return toast('נא לכתוב איך מעבירים לך תשלום', 'err');
     }
     o.step++; scrollTo(0,0); paint();
@@ -1949,7 +1929,7 @@ const ACT = {
   async connResp(el){ const ok = !!el.dataset.ok;
     await run(async () => { await api.rpc('respond_connection', {p_host:el.dataset.id, p_accept:ok}); await refresh(true); }, ok ? 'החיבור אושר' : 'הבקשה נדחתה'); },
   async deposit(){ await run(async () => { await api.rpc('request_deposit_track'); await refresh(true); }, 'הבקשה נשלחה'); },
-  async share(el){ const link = el.dataset.link; const text = 'מצטרפים איתי ל-CleanEilat, עבודה גמישה בניקיון דירות נופש באילת: ' + link;
+  async share(el){ const link = el.dataset.link; const text = 'מצטרפים איתי ל-CleanEilat, עבודה קבועה בניקיון בנייני מגורים באילת: ' + link;
     if (navigator.share) { try { await navigator.share({title:'CleanEilat', text, url:link}); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
     try { await navigator.clipboard.writeText(link); toast('הקישור הועתק'); }
     catch { S.modal = `<h2>הקישור האישי שלך</h2><p class="muted" style="margin-bottom:10px">סמנו והעתיקו את הקישור, ושלחו לחברים.</p><input class="inp" dir="ltr" readonly value="${esc(link)}" onclick="this.select()"><button class="btn lagoon" style="margin-top:12px" data-act="closeModal" data-force="1">סגירה</button>`; paint(); } },
@@ -2078,7 +2058,7 @@ const ACT = {
   },
   addTask(){
     S.modal = `<h2>הוספת ניקיון</h2><form data-submit="task">
-      <label class="f"><span>דירה או בניין</span><select class="inp" name="apt" required>${S.data.aps.filter(a => a.active && !a.deleted_at).map(a => `<option value="${a.id}">${a.kind === 'building' ? 'בניין: ' : ''}${esc(a.name)}</option>`).join('')}</select></label>
+      <label class="f"><span>בניין</span><select class="inp" name="apt" required>${S.data.aps.filter(a => a.kind === 'building' && !a.deleted_at).map(a => `<option value="${a.id}">${esc(a.address)}${a.city ? ', ' + esc(a.city) : ''}</option>`).join('')}</select></label>
       <label class="f"><span>מחיר למנקה (₪, לא חובה)</span><input class="inp" type="number" min="0" name="price"></label>
       <div class="grid2"><label class="f"><span>מ-</span><input class="inp" type="time" name="ws" value="11:00"></label><label class="f"><span>עד</span><input class="inp" type="time" name="we" value="15:00"></label></div>
       <ul class="checks"><li><label><input type="checkbox" name="urgent"><span>דחוף</span></label></li></ul>
@@ -2169,7 +2149,7 @@ const SUB = {
     await run(async () => { await api.rpc('host_approve', {p_task:f.dataset.id, p_rating:S.rate || null, p_review:f.review.value.trim()}); S.modal = null; await refresh(true); }, 'הניקיון אושר');
   },
   async profile(f){
-    const prices = Object.fromEntries(SIZES.filter(([k]) => +f['price_' + k].value > 0).map(([k]) => [k, +f['price_' + k].value]));
+    const prices = f.price_1 ? Object.fromEntries(SIZES.filter(([k]) => +f['price_' + k]?.value > 0).map(([k]) => [k, +f['price_' + k].value])) : (S.profile.prices || {});
     await run(async () => { await api.rpc('update_my_profile', {p_full_name:f.full_name.value.trim(), p_phone:f.phone.value.trim(), p_area:f.area.value.trim() || null, p_bio:f.bio.value.trim() || null, p_prices:prices, p_payment_info:f.payment_info.value.trim() || null}); await refresh(true); }, 'הפרופיל נשמר');
   },
   async hostProfile(f){
@@ -2278,7 +2258,7 @@ function route(){
   if (p.role === 'admin') return show(V.admin);
   if (p.status !== 'approved' || p.role === 'pending') return show(V.onboarding);
   if (p.role === 'cleaner') return show(V.cleaner);
-  if (p.role === 'host') return show(p.onboarding?.kind === 'committee' ? V.committee : V.host);
+  if (p.role === 'host') return show(V.committee);   // vacation-host screens are frozen (V.host kept in code)
 }
 let liveCh = null, liveT;
 function live(){
