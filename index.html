@@ -288,6 +288,24 @@ textarea.inp{min-height:90px;resize:vertical;padding-top:14px}
 [hidden]{display:none!important}
 .impbar{position:sticky;top:0;z-index:40;display:flex;gap:10px;align-items:center;justify-content:space-between;background:#B42318;color:#fff;padding:10px 14px;font-size:14px;line-height:1.4}
 .impbar .btn{background:#fff;color:#B42318;flex:none}
+.chatbtn{position:relative;width:44px;height:44px;border-radius:50%;border:0;background:#fff;display:grid;place-items:center;color:var(--ink);box-shadow:0 4px 14px -8px rgba(20,23,28,.3)}
+.chatbtn svg{width:22px;height:22px}
+.chatbtn .badge{position:absolute;top:-2px;inset-inline-end:-2px;min-width:19px;height:19px;padding:0 5px;border-radius:10px;background:var(--forest);color:#fff;font-size:11px;line-height:19px;font-weight:600}
+.chat{display:flex;flex-direction:column;gap:6px;max-height:min(52vh,460px);overflow-y:auto;padding:6px 2px 10px;margin:8px 0}
+.bub{max-width:82%;padding:9px 13px;border-radius:18px;font-size:15px;line-height:1.45;white-space:pre-wrap;word-break:break-word}
+.bub.me{align-self:flex-start;background:var(--lime);color:var(--forest);border-end-start-radius:6px}
+.bub.them{align-self:flex-end;background:var(--soft);border-end-end-radius:6px}
+.bub small{display:block;font-size:11px;opacity:.65;margin-top:2px}
+.chat-in{display:flex;gap:8px;align-items:flex-end}.chat-in textarea{min-height:46px;max-height:120px;flex:1;min-width:0;width:auto}.chat-in .btn{width:auto;flex:none;padding:0 18px}
+.days{display:flex;gap:6px;flex-wrap:wrap}
+.days label{position:relative}.days input{position:absolute;opacity:0;inset:0}
+.days span{display:grid;place-items:center;min-width:44px;height:44px;border-radius:14px;background:var(--soft);font-weight:600}
+.days input:checked + span{background:var(--lime);color:var(--forest)}
+.days input:focus-visible + span{outline:2px solid var(--forest);outline-offset:2px}
+.seg2{display:flex;gap:6px;background:var(--soft);padding:4px;border-radius:999px;margin-bottom:12px}
+.seg2 label{flex:1;position:relative}.seg2 input{position:absolute;opacity:0;inset:0}
+.seg2 span{display:block;text-align:center;padding:10px 6px;border-radius:999px;font-weight:600;font-size:14px}
+.seg2 input:checked + span{background:#fff;box-shadow:0 2px 8px -4px rgba(20,23,28,.3)}
 .ntc-wrap{padding-top:10px;padding-bottom:0}
 .ntc{display:flex;gap:12px;align-items:flex-start;background:#fff;border-radius:20px;padding:14px;margin-top:10px;box-shadow:inset 0 0 0 1.5px var(--lime2)}
 .ntc.alert{box-shadow:inset 0 0 0 1.5px var(--orange);background:#FFF6EE}
@@ -381,7 +399,10 @@ const money = n => '₪' + Math.round(+n || 0).toLocaleString('he-IL');
 const hm = t => String(t || '').slice(0,5);
 const fmtDate = d => new Date(d + 'T12:00:00Z').toLocaleDateString('he-IL', {weekday:'long', day:'numeric', month:'numeric', timeZone:'UTC'});
 const fmtShort = d => new Date(d + 'T12:00:00Z').toLocaleDateString('he-IL', {weekday:'short', day:'numeric', month:'numeric', timeZone:'UTC'});
-const win = t => `<span dir="ltr" style="unicode-bidi:isolate">${hm(t.window_start)}–${hm(t.window_end)}</span>`;
+const modeSeg = (hoursId, flex = false) => `<div class="seg2" role="radiogroup" aria-label="מתי מנקים"><label><input type="radio" name="mode" value="fixed" data-change="schedMode" ${flex ? '' : 'checked'}><span>שעות קבועות</span></label><label><input type="radio" name="mode" value="flex" data-change="schedMode" ${flex ? 'checked' : ''}><span>גמיש, במהלך היום</span></label></div>`;
+const schedWhen = s => !s ? '' : `${s.days.length === 7 ? 'כל יום' : 'בימים ' + s.days.slice().sort().map(d => ['א׳','ב׳','ג׳','ד׳','ה׳','ו׳','ש׳'][d]).join(' ')}, ${s.flex ? 'במהלך היום' : `<span dir="ltr">${hm(s.from)}–${hm(s.to)}</span>`}`;
+const isFlex = (a, b) => hm(a) === '00:00' && hm(b) >= '23:59';
+const win = t => isFlex(t.window_start, t.window_end) ? 'במהלך היום' : `<span dir="ltr" style="unicode-bidi:isolate">${hm(t.window_start)}–${hm(t.window_end)}</span>`;
 const fmtTime = ts => ts ? new Date(ts).toLocaleTimeString('he-IL', {hour:'2-digit', minute:'2-digit', timeZone:'Asia/Jerusalem'}) : '';
 const nowIso = () => new Date().toISOString();
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : 'id-' + Math.random().toString(36).slice(2));
@@ -413,17 +434,17 @@ const ICON = {
 const ST = {
   requested:  ['ממתין לשיבוץ','gray'],
   pending:    ['ממתין','gray'],
-  arrived:    ['המנקה בדירה','orange'],
+  arrived:    ['המנקה בבניין','orange'],
   in_progress:['בניקיון כעת','orange'],
   submitted:  ['מחכה לאישור','orange'],
   needs_fix:  ['דרוש תיקון','red'],
-  approved:   ['מוכן לאורחים','green'],
+  approved:   ['אושר','green'],
   cancelled:  ['בוטל','gray']
 };
 const payOf = t => { const a = t.apartment || {}; if (a.kind === 'building') return +t.price || 0; return +(t.price ?? t.cleaner_pay ?? (F('deposit') && S.profile?.is_verified ? a.rate_max : a.rate_base)) || 0; };
 const F = k => !!(S.cfg && S.cfg['feature_' + k]);
 const chip = s => `<span class="chip ${ST[s]?.[1] || 'gray'}">${ST[s]?.[0] || esc(s)}</span>`;
-const hostState = s => ['approved'].includes(s) ? ['מוכן לאורחים','green'] : ['arrived','in_progress','submitted','needs_fix'].includes(s) ? ['בניקיון כעת','orange'] : ['ממתין','gray'];
+const hostState = s => ['approved'].includes(s) ? ['אושר','green'] : ['arrived','in_progress','submitted','needs_fix'].includes(s) ? ['בניקיון כעת','orange'] : ['ממתין','gray'];
 const tone = s => ST[s]?.[1] === 'red' ? 'orange' : (ST[s]?.[1] || 'gray');
 
 const CHECK = [
@@ -527,6 +548,7 @@ const D = {
     this.notices = [{id:'nt1', audience:'committee', building_id:null, user_id:null, kind:'tip', title:'חדש: הורדת כל הקבלות של החודש', body:'בלשונית ״קבלות״ אפשר להוריד את כל הקבלות של החודש בקובץ אחד.', active:true, expires_at:null, created_by:'a1', created_at:addDays(td,-1) + 'T08:00:00Z'},
       {id:'nt2', audience:'residents', building_id:'bd1', user_id:null, kind:'notice', title:'ביום ראשון יש ניקיון יסודי', body:'נא לא להשאיר נעליים ועגלות בחדר המדרגות.', active:true, expires_at:null, created_by:'a1', created_at:addDays(td,-2) + 'T08:00:00Z'}];
     this.noticeReads = [];
+    this.messages = [{id:'m1', host_id:'k1', cleaner_id:'c2', sender_id:'c2', body:'היי, הגעתי לבניין. הדלת של חדר האשפה נעולה, יש למישהו מפתח?', created_at:addDays(td,-1) + 'T06:10:00Z', read_at:null}];
     this.audit = [];
     this.issues = [{id:'i1', building_id:'bd1', category:'cleaning', body:'חדר האשפה לא נוקה מאז יום ראשון', status:'open', me_too:2, device_id:'00000000-0000-4000-8000-000000000001', created_at:addDays(td,-1) + 'T17:20:00Z'},
       {id:'i2', building_id:'bd1', category:'maintenance', body:'נורה שרופה בקומה 3', status:'handled', created_at:addDays(td,-6) + 'T09:00:00Z'}];
@@ -553,7 +575,10 @@ const D = {
   prof(id){ return this.profiles.find(p => p.id === id); },
   buildingReport(x){
     const tk = this.tokens[x.building_id]; if (!tk || tk.resident_token !== x.key) throw new Error('קישור הדיירים הוחלף. בקשו מהוועד את הקישור החדש.');
-    this.issues.push({id:uid(), building_id:x.building_id, category:x.category, body:x.body, status:'open', me_too:0, device_id:x.device_id, created_at:nowIso()}); return {ok:true};
+    this.issues.push({id:uid(), building_id:x.building_id, category:x.category, body:x.body, status:'open', me_too:0, device_id:x.device_id, created_at:nowIso()});
+    if (x.category === 'cleaning') { const ap = this.apartments.find(z => z.id === x.building_id), c = ap && this.connections.find(z => z.host_id === ap.host_id && z.cleaner_id === ap.cleaner_id && z.auto_approve);
+      if (c) { Object.assign(c, {auto_approve:false, auto_paused_at:nowIso()}); this.notices.unshift({id:uid(), audience:'user', user_id:ap.host_id, kind:'alert', title:'האישור האוטומטי הושהה', body:'דייר דיווח על בעיה בניקיון. מעכשיו תאשרו את הניקיונות בעצמכם. אחרי 3 ניקיונות תקינים ברצף אפשר להפעיל שוב.', active:true, created_at:nowIso()}); } }
+    return {ok:true};
   },
   buildingMetoo(x){
     const tk = this.tokens[x.building_id]; if (!tk || tk.resident_token !== x.key) throw new Error('קישור הדיירים הוחלף. בקשו מהוועד את הקישור החדש.');
@@ -567,6 +592,25 @@ const D = {
     const f = fd.get('file'), url = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(f); });
     this.building_receipts.push({id:uid(), building_id:i.building_id, title:fd.get('title'), vendor_name:fd.get('vendor') || null, amount:fd.get('amount') === '' ? null : +fd.get('amount'), receipt_date:fd.get('date'), file_path:url, source:'supplier', created_at:nowIso()});
     return {ok:true}; },
+  streak(b, c){
+    let n = 0;
+    for (const t of this.tasks.filter(x => x.apartment_id === b && x.primary_cleaner === c && ['submitted','approved','needs_fix'].includes(x.status) && x.finished_at).sort((x, y) => y.finished_at.localeCompare(x.finished_at))) {
+      if (t.status === 'needs_fix') break;
+      const end = new Date(new Date(t.finished_at).getTime() + 48 * 36e5).toISOString();
+      if (this.issues.some(i => i.building_id === b && i.category === 'cleaning' && i.created_at >= t.finished_at && i.created_at < end)) break;
+      if (t.status === 'approved') n++;
+    }
+    return n;
+  },
+  genSchedule(x){
+    let n = 0; const s = x.schedule;
+    for (let i = 0; i < 14; i++) { const d = addDays(today(), i), dow = new Date(d + 'T12:00:00Z').getUTCDay();
+      if (!s.days.includes(dow) || this.tasks.some(t => t.apartment_id === x.id && t.task_date === d && t.status !== 'cancelled')) continue;
+      this.tasks.push({id:uid(), apartment_id:x.id, host_id:x.host_id, task_date:d, window_start:s.flex ? '00:00' : s.from, window_end:s.flex ? '23:59' : s.to, price:s.price, request_note:s.note || null,
+        source:'host', primary_cleaner:x.cleaner_id, offer_status:'accepted', status:'pending', from_schedule:true, created_at:nowIso()}); n++; }
+    return n;
+  },
+  maskContacts(t){ return t.replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, '[מייל הוסתר]').replace(/(\+?\s?972|0)([\s\-.]?\d){8,9}/g, '[מספר הוסתר]').replace(/(wa\.me|whatsapp\.com|t\.me)\/\S*/gi, '[קישור הוסתר]'); },
   noticeVisible(n, p){
     if (!n.active || (n.expires_at && n.expires_at < nowIso()) || !p || p.status !== 'approved') return false;
     const mine = a => this.apartments.some(x => x.id === n.building_id && x[a] === p.id);
@@ -631,8 +675,26 @@ const D = {
         if (!a.p_before_photos?.length) err('צריך לפחות תמונת מצב אחת לפני שמתחילים');
         if (me.id === t.backup_cleaner) { t.backup_cleaner = t.primary_cleaner; t.primary_cleaner = me.id; }
         Object.assign(t, {status:'in_progress', started_at:nowIso(), start_lat:a.p_lat, start_lng:a.p_lng, before_photos:a.p_before_photos, damage_notes:a.p_damage_notes}); return;
-      case 'finish_cleaning':
-        Object.assign(t, {status:'submitted', finished_at:nowIso(), photos:a.p_photos, checklist:a.p_checklist}); return;
+      case 'finish_cleaning': {
+        Object.assign(t, {status:'submitted', finished_at:nowIso(), photos:a.p_photos, checklist:a.p_checklist});
+        const ap = this.apartments.find(x => x.id === t.apartment_id), c = ap && this.connections.find(x => x.host_id === ap.host_id && x.cleaner_id === t.primary_cleaner);
+        if (ap?.kind === 'building' && t.arrived_at && c?.auto_approve) Object.assign(t, {status:'approved', approved_at:nowIso(), approved_via:'trust'});
+        return; }
+      case 'chat_read': this.messages.filter(m => m.sender_id === a.p_other && !m.read_at && [m.host_id, m.cleaner_id].includes(me.id)).forEach(m => m.read_at = nowIso()); return;
+      case 'my_trust': return this.apartments.filter(x => x.kind === 'building' && x.host_id === me.id && x.cleaner_id).map(x => { const c = this.connections.find(z => z.host_id === me.id && z.cleaner_id === x.cleaner_id) || {};
+        return {cleaner_id:x.cleaner_id, streak:this.streak(x.id, x.cleaner_id), auto_approve:!!c.auto_approve, auto_paused_at:c.auto_paused_at || null}; });
+      case 'my_trusted_by': return this.connections.filter(c => c.cleaner_id === me.id && c.status === 'accepted').map(c => ({host_id:c.host_id, auto_approve:!!c.auto_approve}));
+      case 'set_auto_approve': { const x = this.apartments.find(z => z.kind === 'building' && z.host_id === me.id && z.cleaner_id === a.p_cleaner);
+        if (!x) err('המנקה לא משויך/ת לבניין שלך'); if (a.p_on && this.streak(x.id, a.p_cleaner) < 3) err('אישור אוטומטי נפתח אחרי 3 ניקיונות תקינים ברצף');
+        Object.assign(this.connections.find(z => z.host_id === me.id && z.cleaner_id === a.p_cleaner), {auto_approve:a.p_on, auto_paused_at:null}); return a.p_on; }
+      case 'set_schedule': { const x = this.apartments.find(z => z.id === a.p_building && z.host_id === me.id); if (!x) err('הבניין לא שייך לך');
+        this.tasks.filter(z => z.apartment_id === x.id && z.from_schedule && z.status === 'pending' && z.task_date >= today()).forEach(z => z.status = 'cancelled');
+        if (!a.p_days.length) { Object.assign(x, {schedule:null, schedule_status:'none'}); return 'none'; }
+        if (!a.p_flex && (!a.p_from || !a.p_to || a.p_to <= a.p_from)) err('שעת הסיום צריכה להיות אחרי שעת ההתחלה');
+        Object.assign(x, {schedule:{days:a.p_days, flex:a.p_flex, from:a.p_from, to:a.p_to, price:a.p_price, note:a.p_note || ''}, schedule_status:x.cleaner_id ? 'offered' : 'none'}); return x.schedule_status; }
+      case 'respond_schedule': { const x = this.apartments.find(z => z.id === a.p_building && z.cleaner_id === me.id && z.schedule_status === 'offered'); if (!x) err('אין הצעה פתוחה לבניין הזה');
+        x.schedule_status = a.p_accept ? 'accepted' : 'declined'; return a.p_accept ? this.genSchedule(x) : 0; }
+      case 'my_schedules': return this.apartments.filter(x => x.kind === 'building' && x.cleaner_id === me.id && x.schedule).map(x => ({id:x.id, address:x.address, schedule:x.schedule, schedule_status:x.schedule_status, committee:this.prof(x.host_id)?.full_name, host_id:x.host_id}));
       case 'admin_approve': {
         const ap = this.apartments.find(x => x.id === t.apartment_id), c = this.prof(t.primary_cleaner);
         const pay = t.cleaner_pay ?? (c.is_verified ? ap.rate_max : ap.rate_base);
@@ -656,7 +718,7 @@ const D = {
         const sum = f => m.filter(f).reduce((s, x) => s + (+x.price || 0), 0); return {count:m.length, total:sum(() => true), paid:sum(x => x.paid_at), unpaid:sum(x => !x.paid_at)}; }
       case 'my_contacts':
         return this.connections.filter(c => c.host_id === me.id || c.cleaner_id === me.id).map(c => { const side = c.host_id === me.id ? 'cleaner' : 'host', o = this.prof(side === 'cleaner' ? c.cleaner_id : c.host_id), ok = c.status === 'accepted';
-          return {id:o.id, full_name:o.full_name, avatar_url:null, phone:ok ? o.phone : null, payment_info:ok && side === 'cleaner' ? o.payment_info : null, prices:side === 'cleaner' ? o.prices : null, rating:side === 'cleaner' ? o.rating : null, status:c.status, side}; });
+          return {id:o.id, full_name:o.full_name, avatar_url:null, phone:null, payment_info:ok && side === 'cleaner' ? o.payment_info : null, prices:side === 'cleaner' ? o.prices : null, rating:side === 'cleaner' ? o.rating : null, status:c.status, side}; });
       case 'list_cleaners':
         return this.profiles.filter(p => p.role === 'cleaner' && p.status === 'approved').map(p => ({id:p.id, full_name:p.full_name, avatar_url:null, area:p.area, bio:p.bio, prices:p.prices || {}, rating:p.rating, rating_count:p.rating_count || 0, connection:this.connections.find(c => c.host_id === me.id && c.cleaner_id === p.id)?.status || null}))
           .sort((x, y) => (y.rating || 0) - (x.rating || 0));
@@ -746,6 +808,39 @@ function noticeCard(n, btn){
     <div class="mid"><b>${esc(n.title)}</b>${n.body ? `<p>${esc(n.body)}</p>` : ''}<small>מצוות ועדלי · ${fmtShort(ilDate(n.created_at))}</small></div>
     ${btn ? `<button class="btn xs ghost" data-act="ntcRead" data-id="${n.id}">הבנתי</button>` : ''}</section>`;
 }
+/* ═════════════ in-app chat (committee ↔ cleaner) ═════════════ */
+const chatUnread = (other) => (S.msgs || []).filter(m => m.sender_id !== S.profile?.id && !m.read_at && (!other || m.sender_id === other)).length;
+const chatBtn = () => { const n = chatUnread(); return `<button class="chatbtn" data-act="chatOpen" aria-label="צ׳אט${n ? `, ${n} הודעות חדשות` : ''}">${ICON.chat}${n ? `<span class="badge">${n}</span>` : ''}</button>`; };
+const chatPeers = () => (S.data.contacts || []).filter(c => ['pending','accepted'].includes(c.status) && c.side === (S.profile?.role === 'host' ? 'cleaner' : 'host'));
+async function loadChat(){
+  const p = S.profile;
+  if (!p || !['host','cleaner'].includes(p.role) || p.status !== 'approved') { S.msgs = []; return; }
+  try { S.msgs = await api.chatAll(); } catch { S.msgs = S.msgs || []; }
+}
+function chatView(){
+  const me = S.profile.id, o = S.chat.other, list = (S.msgs || []).filter(m => m.sender_id === o || (m.sender_id === me && (m.host_id === o || m.cleaner_id === o)));
+  return `<div class="row between"><h2 style="margin:0">${esc(S.chat.name || 'צ׳אט')}</h2><button class="btn xs ghost" type="button" data-act="closeModal" data-force="1">סגירה</button></div>
+    <p class="muted small" style="margin:4px 0 0">מספרי טלפון ומיילים מוסתרים בצ׳אט, כדי שכל הסיכומים יישארו מתועדים כאן.</p>
+    <div class="chat" id="chatList">${list.map(m => `<div class="bub ${m.sender_id === me ? 'me' : 'them'}">${esc(m.body)}<small>${fmtShort(ilDate(m.created_at))}, ${fmtTime(m.created_at)}</small></div>`).join('') || '<p class="muted" style="text-align:center;padding:18px 0">עוד אין הודעות. כתבו את ההודעה הראשונה.</p>'}</div>
+    <form class="chat-in" data-submit="chatSend"><label class="sr" for="chatInput">הודעה</label><textarea id="chatInput" class="inp" name="body" required maxlength="2000" placeholder="כתבו הודעה…"></textarea><button class="btn lagoon" type="submit">שליחה</button></form>`;
+}
+function chatList(){
+  const peers = chatPeers();
+  return `<div class="row between"><h2 style="margin:0">צ׳אט</h2><button class="btn xs ghost" type="button" data-act="closeModal" data-force="1">סגירה</button></div>
+    ${peers.length ? `<ul class="rows" style="margin-top:10px">${peers.map(c => { const last = (S.msgs || []).filter(m => m.sender_id === c.id || m.host_id === c.id || m.cleaner_id === c.id).pop(), n = chatUnread(c.id);
+      return `<li><button class="rowi" data-act="chatWith" data-id="${c.id}" data-name="${esc(c.full_name)}"><span class="av" style="width:40px;height:40px">${initials(c.full_name)}</span>
+        <span class="mid"><b>${esc(c.full_name)}</b><span>${last ? esc(last.body.slice(0, 60)) : c.status === 'pending' ? 'ממתין לאישור החיבור' : 'עוד אין הודעות'}</span></span>${n ? `<span class="end"><span class="tag gold">${n}</span></span>` : ''}</button></li>`; }).join('')}</ul>`
+      : `<p class="muted" style="margin-top:10px">${S.profile.role === 'host' ? 'הצ׳אט נפתח אחרי ששולחים בקשה למנקה מלשונית ״מנקים״.' : 'הצ׳אט נפתח כשוועד בית פונה אליך.'}</p>`}`;
+}
+async function chatRefresh(){
+  const inp = document.getElementById('chatInput'), val = inp?.value || '', foc = document.activeElement === inp;
+  await loadChat();
+  if (S.chat?.other && chatUnread(S.chat.other)) { try { await api.rpc('chat_read', {p_other:S.chat.other}); } catch {} (S.msgs || []).forEach(m => { if (m.sender_id === S.chat.other) m.read_at ??= nowIso(); }); }
+  paint();
+  const ni = document.getElementById('chatInput'); if (ni) { ni.value = val; if (foc) ni.focus(); }
+  const cl = document.getElementById('chatList'); if (cl) cl.scrollTop = cl.scrollHeight;
+}
+let chatPoll;
 const noticesBar = () => `<div class="shell ntc-wrap">${S.notices.slice(0, 3).map(n => noticeCard(n, true)).join('')}</div>`;
 async function loadNotices(){
   const p = S.profile;
@@ -780,6 +875,14 @@ const api = {
     if (DEMO) { const me = D.me(); return D.notices.filter(n => D.noticeVisible(n, me) && !D.noticeReads.some(r => r.notice_id === n.id && r.user_id === me.id)); }
     const [ns, rs] = await Promise.all([q(sb.from('notices').select('id, kind, title, body, created_at').order('created_at', {ascending:false}).limit(10)), q(sb.from('notice_reads').select('notice_id').eq('user_id', S.profile.id))]);
     return ns.filter(n => !rs.some(r => r.notice_id === n.id));
+  },
+  async chatAll(){
+    if (DEMO) { const me = D.me().id; return D.messages.filter(m => [m.host_id, m.cleaner_id].includes(me)).sort((a, b) => a.created_at.localeCompare(b.created_at)); }
+    return (await q(sb.from('messages').select('*').order('created_at', {ascending:false}).limit(400))).reverse();
+  },
+  async chatSend(row){
+    if (DEMO) { D.messages.push({id:uid(), ...row, body:D.maskContacts(row.body), created_at:nowIso(), read_at:null}); return; }
+    await q(sb.from('messages').insert(row));
   },
   async noticeRead(id){
     if (DEMO) { D.noticeReads.push({notice_id:id, user_id:D.me().id}); return; }
@@ -1013,6 +1116,7 @@ async function run(fn, okMsg){
 function paint(){
   if (!S.view) return;
   const y = scrollY;
+  if (S.chat) S.modal = S.chat.other ? chatView() : chatList();
   let html = S.view.html();
   if (S.notices?.length && S.profile && S.view !== V.building && S.view !== V.supplier) html = html.replace('</header>', '</header>' + noticesBar());
   app.innerHTML = (IMP ? impBar() : '') + html
@@ -1035,6 +1139,7 @@ function ask(title, placeholder, okLabel = 'שמירה'){
 }
 
 Object.assign(ICON, {
+  chat:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M8.5 11h7M8.5 14h4"/></svg>',
   bell:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10 20a2 2 0 0 0 4 0"/></svg>',
   arrow:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 7 7 17M8 7h9v9"/></svg>',
   share:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></svg>',
@@ -1051,9 +1156,10 @@ function topbar(){
       <span><b>${p.full_name ? 'שלום, ' + esc(first(p.full_name)) : 'ברוך הבא'}</b><small>${roleName}</small></span></button>`
       : `<a class="brand" href="#" data-act="home"><i aria-hidden="true"></i>ועדלי</a>`}
     <span class="sp"></span>
+    ${p && ['host','cleaner'].includes(p.role) && p.status === 'approved' && !p.blocked_at ? chatBtn() : ''}
     ${DEMO ? `<label class="sr" for="demoSw">החלף תצוגה בהדגמה</label><select id="demoSw" class="demo-sw" data-change="demoRole">
       ${[['cleaner','הדגמה: מנקה'], ['admin','הדגמה: מנהל'], ['committee','הדגמה: ועד בית'], ['new','הדגמה: נרשם חדש']].map(([v, l]) => `<option value="${v}" ${D.cur === v ? 'selected' : ''}>${l}</option>`).join('')}
-    </select>` : `<span class="brand hide-sm"><i aria-hidden="true"></i></span>`}
+    </select>` : p && ['host','cleaner'].includes(p.role) && p.status === 'approved' ? '' : `<span class="brand hide-sm"><i aria-hidden="true"></i></span>`}
   </div></header>`;
 }
 function tabs(items, key, desk){
@@ -1278,13 +1384,14 @@ V.cleaner = {
     const [tasks, pool, earn, contacts, history, settings, me, issues] = await Promise.all([
       api.cleanerTasks(), api.rpc('open_pool'), api.rpc('cleaner_earnings'), api.rpc('my_contacts'), api.cleanerHistory(), api.settings(), api.me(), api.cleanerIssues()
     ]);
+    const [sched, trustedBy] = await Promise.all([api.rpc('my_schedules').catch(() => []), api.rpc('my_trusted_by').catch(() => [])]);
     S.profile = me;
-    Object.assign(S.data, {tasks, pool, earn, contacts:contacts || [], history, settings, issues}); S.cfg = settings;
+    Object.assign(S.data, {tasks, pool, earn, contacts:contacts || [], history, settings, issues, sched:sched || [], trustedBy:trustedBy || []}); S.cfg = settings;
   },
   html(){
     const d = S.data, t = S.taskId && d.tasks.find(x => x.id === S.taskId);
     const main = t ? this.detail(t) : ({today:this.today, pool:this.pool, earn:this.earn, profile:this.profile})[S.tab.c].call(this);
-    const inbox = d.tasks.filter(isOffer).length + d.contacts.filter(c => c.side === 'host' && c.status === 'pending').length;
+    const inbox = d.tasks.filter(isOffer).length + d.contacts.filter(c => c.side === 'host' && c.status === 'pending').length + (d.sched || []).filter(x => x.schedule_status === 'offered').length;
     return topbar() + `<main class="shell">${main}</main>` + tabs([['today','בית','list', inbox || ''], ['earn','הכנסות','wallet'], ['profile','פרופיל','user']], 'c');
   },
   today(){
@@ -1317,8 +1424,15 @@ V.cleaner = {
           <div class="num" style="font-size:26px;font-weight:600;margin-top:4px">${money(e.unpaid)}</div><span class="tag" style="margin-top:8px">ישירות מהוועדים</span></section>
       </div>
       ${reqs.length ? `<section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.users} ועדי בית שרוצים לעבוד איתך</h3><span class="tag gold">${reqs.length}</span></div>
-        <ul class="rows">${reqs.map(c => `<li class="rowi"><span class="av" style="width:40px;height:40px">${initials(c.full_name)}</span><span class="mid"><b>${esc(c.full_name)}</b><span>אחרי אישור יראה/תראה את הטלפון ופרטי התשלום שלך</span></span>
-          <span class="end row" style="flex-wrap:nowrap;gap:6px"><button class="btn xs green" data-act="connResp" data-id="${c.id}" data-ok="1">אישור</button><button class="btn xs ghost" data-act="connResp" data-id="${c.id}">לא עכשיו</button></span></li>`).join('')}</ul></section>` : ''}
+        <ul class="rows">${reqs.map(c => `<li class="rowi"><span class="av" style="width:40px;height:40px">${initials(c.full_name)}</span><span class="mid"><b>${esc(c.full_name)}</b><span>אחרי אישור יראה/תראה את פרטי התשלום שלך</span></span>
+          <span class="end row" style="flex-wrap:nowrap;gap:6px"><button class="btn xs green" data-act="connResp" data-id="${c.id}" data-ok="1">אישור</button><button class="btn xs ghost" data-act="connResp" data-id="${c.id}">לא עכשיו</button><button class="btn xs ghost" data-act="chatWith" data-id="${c.id}" data-name="${esc(c.full_name)}">צ׳אט</button></span></li>`).join('')}</ul></section>` : ''}
+      ${(S.data.sched || []).filter(x => x.schedule_status === 'offered').map(x => `<section class="card lime" style="margin-top:12px">
+        <div class="row between"><span class="vbadge"><i>✓</i>הצעה לניקיון קבוע</span>${x.schedule.price ? `<b class="num" style="font-size:22px">${money(x.schedule.price)}</b>` : ''}</div>
+        <h3 style="font-size:19px;font-weight:700;margin:10px 0 2px">${esc(x.address)}</h3><p class="muted">${esc(x.committee || 'ועד הבית')}</p>
+        <p style="margin:6px 0 4px;font-weight:600">${schedWhen(x.schedule)}</p>
+        ${x.schedule.flex ? '<p class="small" style="margin-bottom:10px">גמיש: מגיעים מתי שנוח באותו יום, מסמנים הגעה ומצלמים בסוף.</p>' : ''}${x.schedule.note ? `<p class="small" style="margin-bottom:12px">הערה: ${esc(x.schedule.note)}</p>` : ''}
+        <div class="row" style="flex-wrap:nowrap"><button class="btn" style="flex:1" data-act="schedResp" data-id="${x.id}" data-ok="1">מאשר/ת</button><button class="btn ghost sm" style="background:#fff" data-act="schedResp" data-id="${x.id}">לא מתאים</button></div></section>`).join('')}
+      ${(S.data.sched || []).filter(x => x.schedule_status === 'accepted').length ? `<section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.cal} ניקיונות קבועים</h3></div><ul class="rows">${S.data.sched.filter(x => x.schedule_status === 'accepted').map(x => `<li class="rowi"><span class="ic lime">${ICON.cal}</span><span class="mid"><b>${esc(x.address)}</b><span>${schedWhen(x.schedule)}</span></span>${(S.data.trustedBy || []).some(t => t.auto_approve && t.host_id === x.host_id) ? '<span class="end"><span class="tag gold">אישור אוטומטי</span></span>' : ''}</li>`).join('')}</ul></section>` : ''}
       ${(S.data.issues || []).filter(i => i.status === 'open').length ? `<section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.list} פניות דיירים על ניקיון</h3><span class="tag gold">${S.data.issues.filter(i => i.status === 'open').length}</span></div>
         <ul class="rows">${S.data.issues.filter(i => i.status === 'open').map(i => `<li class="rowi" style="align-items:flex-start"><span class="ic orange">${ICON.broom}</span><span class="mid"><b>${esc(i.building?.address || '')} · ${fmtShort(new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Jerusalem'}).format(new Date(i.created_at)))}</b><span style="white-space:normal;color:var(--ink)">${esc(i.body)}</span>${i.me_too ? `<span>${i.me_too + 1} דיירים</span>` : ''}</span></li>`).join('')}</ul>
         <p class="muted small" style="margin-top:8px">הוועד רואה את הפניות האלה ומסמן כשטופלו.</p></section>` : ''}
@@ -1328,7 +1442,7 @@ V.cleaner = {
         ${todays.length ? `<ul class="rows">${open.concat(todays.filter(t => t.status === 'approved')).map(row).join('')}</ul>`
           : `<div class="empty" style="padding:16px 6px"><p>אין ניקיונות היום.</p></div>`}
       </section>
-      ${todays.length ? `<section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.clock} התקדמות היום</h3></div>${ring(doneN, todays.length, `${doneN}/${todays.length}`, 'דירות מוכנות')}</section>` : ''}
+      ${todays.length ? `<section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.clock} התקדמות היום</h3></div>${ring(doneN, todays.length, `${doneN}/${todays.length}`, 'הושלמו')}</section>` : ''}
       ${later.length ? `<section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.cal} הימים הקרובים</h3></div><ul class="rows">${later.map(t => `<li><button class="rowi" data-act="openTask" data-id="${t.id}"><span class="ic">${ICON.cal}</span><span class="mid"><b>${esc(t.apartment?.name)}</b><span>${fmtShort(t.task_date)}, ${win(t)}</span></span><span class="end">${payOf(t) ? `<b class="num">${money(payOf(t))}</b>` : ''}</span></button></li>`).join('')}</ul></section>` : ''}`;
   },
   offerCard(t){
@@ -1349,7 +1463,7 @@ V.cleaner = {
     <div class="td-head">${isOffer(t) ? '<span class="chip orange">ממתין לאישור שלך</span>' : chip(st)}
       <h2>${esc(a.name)}</h2><p class="muted">${esc(a.complex?.name || '')}${a.complex?.name && a.address ? ', ' : ''}${esc(a.address || '')}</p>
       <div class="row between" style="margin-top:10px"><span class="win">${fmtShort(t.task_date)}, ${win(t)}${payOf(t) ? ` · <span class="num">${money(payOf(t))}</span>` : ''}</span>
-      <span class="row" style="gap:6px">${host ? `<a class="btn sm ghost" href="tel:${esc(host.phone)}">התקשרות</a>` : ''}${a.address ? `<a class="btn sm ghost" href="https://waze.com/ul?q=${encodeURIComponent(a.address + ', אילת')}&navigate=yes" target="_blank" rel="noopener">Waze</a>` : ''}</span></div>
+      <span class="row" style="gap:6px">${(t.host_id || a.host_id) && S.data.contacts.some(c => c.side === 'host' && c.id === (t.host_id || a.host_id)) ? `<button class="btn sm ghost" data-act="chatWith" data-id="${t.host_id || a.host_id}">צ׳אט עם הוועד</button>` : ''}${a.address ? `<a class="btn sm ghost" href="https://waze.com/ul?q=${encodeURIComponent(a.address + ', אילת')}&navigate=yes" target="_blank" rel="noopener">Waze</a>` : ''}</span></div>
       ${a.notes ? `<p class="small" style="margin-top:8px"><b>הערות:</b> ${esc(a.notes)}</p>` : ''}
     </div>`;
     if (isOffer(t)) return head + this.offerCard(t);
@@ -1363,23 +1477,23 @@ V.cleaner = {
     const canFinish = photosOk && checked === CK.length;
     return head + `
     ${st === 'needs_fix' ? `<div class="alert orange"><b>התבקש תיקון:</b> ${esc(t.admin_note || '')}<br>תקנו, החליפו את התמונות הרלוונטיות ושלחו שוב.</div>` : ''}
-    ${t.backup_cleaner === S.profile.id && stage < 3 ? `<div class="alert info">את/ה בכוננות גיבוי לדירה הזו. היכנס/י רק אם ביקשו ממך.</div>` : ''}
+    ${t.backup_cleaner === S.profile.id && stage < 3 ? `<div class="alert info">את/ה בכוננות גיבוי לבניין הזה. היכנס/י רק אם ביקשו ממך.</div>` : ''}
     <ol class="flow">
-      <li class="${stage > 1 ? 'done' : 'cur'}"><h3>הגעה לדירה</h3>
+      <li class="${stage > 1 ? 'done' : 'cur'}"><h3>הגעה לבניין</h3>
         ${code && stage < 4 ? `<div class="codebox"><span>קוד כניסה</span><b>${esc(code.code || '—')}</b>${code.notes ? `<p>${esc(code.notes)}</p>` : ''}</div>`
-          : stage < 4 ? `<button class="btn ${stage === 1 ? 'lagoon' : 'ghost'}" data-act="reveal" data-id="${t.id}">${ICON.key.replace('<svg','<svg width="22" height="22"')} ${stage === 1 ? 'הגעתי לדירה' : 'הצגת קוד הכניסה שוב'}</button>
+          : stage < 4 ? `<button class="btn ${stage === 1 ? 'lagoon' : 'ghost'}" data-act="reveal" data-id="${t.id}">${ICON.key.replace('<svg','<svg width="22" height="22"')} ${stage === 1 ? 'הגעתי לבניין' : 'הצגת קוד הכניסה שוב'}</button>
              <p class="hint">קוד הכניסה נחשף רק ביום הניקיון, כשמגיעים. שעת ההגעה נשמרת.</p>` : ''}
         ${t.arrived_at ? `<p class="muted small" style="margin-top:8px">הגעה נרשמה ב-${fmtTime(t.arrived_at)}</p>` : ''}
       </li>
-      <li class="${stage > 2 ? 'done' : stage === 2 ? 'cur' : ''}"><h3>צילום מצב הדירה לפני הניקיון</h3>
-        ${stage === 2 ? `<p class="muted small" style="margin-bottom:10px">צלמו את המקום כפי שמצאתם אותו, וכל נזק או בעיה. זה מגן עליך.</p>
+      <li class="${stage > 2 ? 'done' : stage === 2 ? 'cur' : ''}"><h3>צילום מצב לפני הניקיון</h3>
+        ${stage === 2 ? `<p class="muted small" style="margin-bottom:10px">צלמו את הלובי וחדר המדרגות כפי שמצאתם אותם, וכל נזק או בעיה. זה מגן עליך.</p>
           <div class="ph-grid">${dr.before.map((p, i) => `<div class="ph"><img data-p="${esc(p)}" alt="תמונת מצב ${i + 1}" data-act="zoom"><button class="x" data-act="rmBefore" data-id="${t.id}" data-i="${i}" aria-label="הסרת תמונה">×</button></div>`).join('')}
             ${dr.before.length < 8 ? addTile('before', dr.before.length ? 'עוד תמונה' : 'צילום מצב', !dr.before.length) : ''}</div>
-          <label class="f" style="margin-top:12px"><span>נזקים או בעיות שמצאתי (לא חובה)</span><textarea class="inp" data-bind="draft.${t.id}.notes" placeholder="למשל: כוס שבורה במטבח, כתם על הספה">${esc(dr.notes)}</textarea></label>
+          <label class="f" style="margin-top:12px"><span>בעיות שמצאתי (לא חובה)</span><textarea class="inp" data-bind="draft.${t.id}.notes" placeholder="למשל: נורה שרופה בקומה 3, שקיות זבל בחדר המדרגות">${esc(dr.notes)}</textarea></label>
           <button class="btn lagoon" data-act="start" data-id="${t.id}" ${dr.before.length ? '' : 'disabled'}>התחל ניקיון</button>
           <p class="hint">${dr.before.length ? 'בלחיצה נשמרים השעה ומיקום ה-GPS.' : 'צריך לפחות תמונה אחת כדי להתחיל.'}</p>`
         : stage > 2 ? `<div class="strip">${(t.before_photos || []).map(p => img(p, '', '')).join('')}</div>
-          ${t.damage_notes ? `<p class="small" style="margin-top:8px"><b>נזקים שתועדו:</b> ${esc(t.damage_notes)}</p>` : ''}
+          ${t.damage_notes ? `<p class="small" style="margin-top:8px"><b>בעיות שתועדו:</b> ${esc(t.damage_notes)}</p>` : ''}
           <p class="muted small" style="margin-top:6px">התחלה ב-${fmtTime(t.started_at)}${t.start_lat ? ', מיקום GPS נשמר' : ''}</p>` : ''}
       </li>
       <li class="${stage > 3 ? 'done' : stage === 3 ? 'cur' : ''}"><h3>צ׳ק-ליסט ו-4 תמונות סיום</h3>
@@ -1393,14 +1507,14 @@ V.cleaner = {
           <p class="hint">${canFinish ? (isBld(t) ? 'התמונות יוצגו לדיירים בדף הבניין.' : 'התמונות יישלחו לאישור.') : `חסרים: ${[!photosOk && `${SL.filter(([k]) => !dr.photos[k]).length} תמונות`, checked < CK.length && `${CK.length - checked} סעיפים בצ׳ק-ליסט`].filter(Boolean).join(' ו-')}`}</p></div>`
         : stage === 4 ? `<div class="ph-grid four">${SL.map(([k, l]) => img(t.photos?.[k], l)).join('')}</div>
           <div class="alert ${st === 'approved' ? 'green' : 'info'}">${st === 'approved'
-            ? `הניקיון אושר${t.rating ? ` עם דירוג ${'★'.repeat(t.rating)}` : ''}. ${t.paid_at ? 'סומן שהתשלום הועבר.' : payOf(t) ? `התשלום (${money(payOf(t))}) מגיע ישירות מהלקוח.` : ''}`
+            ? `${t.approved_via === 'trust' ? 'הניקיון אושר אוטומטית: הוועד סומך עליך.' : `הניקיון אושר${t.rating ? ` עם דירוג ${'★'.repeat(t.rating)}` : ''}.`} ${t.paid_at ? 'סומן שהתשלום הועבר.' : payOf(t) ? `התשלום (${money(payOf(t))}) מגיע ישירות מהלקוח.` : ''}`
             : 'נשלח לאישור. התמונות יאושרו אחרי שיראו אותן.'}</div>` : ''}
       </li>
     </ol>`;
   },
   pool(){
     const d = S.data;
-    return `<div class="hello"><h1>עבודות פתוחות</h1><p>ניקיונות שבעלי דירות פרסמו ועוד אין להם מנקה. המחיר לפי המחירון שלך, ומי שלוקח ראשון מקבל.</p></div>
+    return `<div class="hello"><h1>עבודות פתוחות</h1><p>ניקיונות שוועדי בית פרסמו ועוד אין להם מנקה. המחיר לפי המחירון שלך, ומי שלוקח ראשון מקבל.</p></div>
       ${d.pool.length ? d.pool.map(x => `<div class="card">
         <div class="row between"><span class="tag">${sizeName(x.size)}</span>${x.pay ? `<b style="font-size:20px">${money(x.pay)}</b>` : ''}</div>
         <h3 style="font-size:19px;font-weight:700;margin:8px 0 2px">${esc(x.apartment)}</h3>
@@ -1408,7 +1522,7 @@ V.cleaner = {
         <p style="margin:6px 0 12px;font-weight:600">${fmtShort(x.task_date)}, ${win(x)}</p>
         ${x.pay ? `<button class="btn lagoon" data-act="claim" data-id="${x.id}">אני לוקח/ת את זה</button>`
           : `<button class="btn ghost" data-act="tab" data-key="c" data-id="profile">קבעו מחיר ל${sizeName(x.size)} כדי לקחת</button>`}</div>`).join('')
-        : `<div class="card empty"><h3>אין עבודות פתוחות כרגע</h3><p>כשבעל דירה יפרסם ניקיון בלי מנקה קבוע, הוא יופיע כאן.</p></div>`}`;
+        : `<div class="card empty"><h3>אין עבודות פתוחות כרגע</h3><p>כשוועד בית יפרסם ניקיון בלי מנקה קבוע, הוא יופיע כאן.</p></div>`}`;
   },
   earn(){
     const e = S.data.earn || {}, h = S.data.history || [];
@@ -1524,11 +1638,11 @@ V.host = {
       ${c.bio ? `<p class="small muted" style="margin-top:6px">${esc(c.bio)}</p>` : ''}${actions}</div></div>`;
     return `<div class="sec-h" style="margin-top:0"><h2>המנקים שלי</h2><span class="muted">${mine.filter(c => c.status === 'accepted').length}</span></div>
       ${mine.length ? mine.map(c => pCard(c, c.status === 'accepted'
-        ? `<div class="kv" style="margin-top:8px">${c.phone ? `<a href="tel:${esc(c.phone)}" dir="ltr">${esc(c.phone)}</a>` : ''}${c.payment_info ? `<span>תשלום: <b>${esc(c.payment_info)}</b></span>` : ''}</div>`
-        : `<p class="small" style="margin-top:8px">${c.status === 'pending' ? '<span class="tag">ממתין לאישור המנקה</span>' : '<span class="tag">המנקה לא אישר/ה</span>'}</p>`)).join('')
+        ? `<div class="kv" style="margin-top:8px">${c.payment_info ? `<span>תשלום: <b>${esc(c.payment_info)}</b></span>` : ''}</div><button class="btn xs ghost" style="margin-top:8px" data-act="chatWith" data-id="${c.id}" data-name="${esc(c.full_name)}">צ׳אט</button>`
+        : `<p class="small" style="margin-top:8px">${c.status === 'pending' ? `<span class="tag">ממתין לאישור המנקה</span> <button class="btn xs ghost" data-act="chatWith" data-id="${c.id}" data-name="${esc(c.full_name)}">צ׳אט</button>` : '<span class="tag">המנקה לא אישר/ה</span>'}</p>`)).join('')
         : '<div class="card"><p class="muted">עוד לא נוצר חיבור עם מנקה. בחרו מהרשימה למטה ושלחו בקשה.</p></div>'}
       <div class="sec-h"><h2>מנקים באילת</h2><span class="muted">${others.length}</span></div>
-      <p class="muted small" style="margin:-4px 0 10px">הטלפון ופרטי התשלום נפתחים אחרי שהמנקה מאשר/ת את הבקשה.</p>
+      <p class="muted small" style="margin:-4px 0 10px">אחרי ששולחים בקשה אפשר לדבר עם המנקה בצ׳אט. פרטי התשלום נפתחים אחרי שהמנקה מאשר/ת.</p>
       ${others.length ? others.map(c => pCard(c, `<button class="btn xs lagoon" style="margin-top:10px" data-act="connReq" data-id="${c.id}">בקשה לעבוד יחד</button>`)).join('')
         : '<div class="card"><p class="muted">אין כרגע מנקים נוספים ברשימה. מנקים חדשים מצטרפים כל הזמן.</p></div>'}`;
   },
@@ -1575,9 +1689,9 @@ V.committee = {
   async load(){
     S.tab.k ??= 'bld';
     S.kMonth ??= today().slice(0, 7);
-    const [h, contacts, dir, settings, me] = await Promise.all([api.committeeData(), api.rpc('my_contacts'), api.rpc('list_cleaners'), api.settings(), api.me()]);
+    const [h, contacts, dir, settings, me, trust] = await Promise.all([api.committeeData(), api.rpc('my_contacts'), api.rpc('list_cleaners'), api.settings(), api.me(), api.rpc('my_trust').catch(() => [])]);
     S.profile = me;
-    Object.assign(S.data, h, {contacts:(contacts || []).filter(c => c.side === 'cleaner'), dir:dir || [], settings}); S.cfg = settings;
+    Object.assign(S.data, h, {contacts:(contacts || []).filter(c => c.side === 'cleaner'), dir:dir || [], settings, trust:trust || []}); S.cfg = settings;
   },
   html(){
     const d = S.data, toApprove = d.tasks.filter(t => t.status === 'submitted').length, open = (d.issues || []).filter(i => i.status === 'open').length;
@@ -1629,11 +1743,51 @@ V.committee = {
             <div class="row" style="margin-top:10px;flex-wrap:nowrap"><button class="btn green sm" style="flex:1" data-act="hostApprove" data-id="${t.id}">לאשר כבר עכשיו</button><button class="btn orange sm" data-act="hostFix" data-id="${t.id}">דרוש תיקון</button></div>` : ''}`
           : '<p class="muted">עוד לא היה ניקיון מתועד. אחרי הניקיון הראשון, התמונות יופיעו כאן ובדף הבניין.</p>'}
       </section>
+      ${b.cleaner_id ? this.schedCard(b) + this.trustCard(b) : ''}
       <section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.users} המנקה של הבניין</h3></div>
         ${ok.length ? `<select class="inp" data-change="kCleaner" data-id="${b.id}" aria-label="המנקה של הבניין"><option value="">עוד לא נבחר/ה</option>${ok.map(c => `<option value="${c.id}" ${b.cleaner_id === c.id ? 'selected' : ''}>${esc(c.full_name)}</option>`).join('')}</select>
-          <div class="row" style="margin-top:10px;gap:8px"><button class="btn sm lagoon" data-act="kOrder" ${b.cleaner_id ? '' : 'disabled'}>הזמנת ניקיון</button><button class="btn sm ghost" data-act="tab" data-key="k" data-id="cleaners">כל המנקים</button></div>`
+          <div class="row" style="margin-top:10px;gap:8px;flex-wrap:wrap">${b.cleaner_id ? `<button class="btn sm ghost" data-act="chatWith" data-id="${b.cleaner_id}" data-name="${esc(V.host.cname(b.cleaner_id))}">${ICON.chat.replace('<svg', '<svg width="18" height="18"')} צ׳אט</button>` : ''}<button class="btn sm lagoon" data-act="kOrder" ${b.cleaner_id ? '' : 'disabled'}>ניקיון חד-פעמי</button><button class="btn sm ghost" data-act="tab" data-key="k" data-id="cleaners">כל המנקים</button></div>`
           : `<p class="muted" style="margin-bottom:10px">בחרו מנקה מהרשימה ושלחו בקשה. אחרי שהמנקה מאשר/ת, אפשר להזמין ניקיונות.</p><button class="btn sm lagoon" data-act="tab" data-key="k" data-id="cleaners">לרשימת המנקים</button>`}
       </section>`;
+  },
+  schedCard(b){
+    const s = b.schedule, st = b.schedule_status;
+    const DN = ['א׳','ב׳','ג׳','ד׳','ה׳','ו׳','ש׳'];
+    const when = s ? `${s.days.length === 7 ? 'כל יום' : 'בימים ' + s.days.slice().sort().map(d => DN[d]).join(' ')}, ${s.flex ? 'במהלך היום' : `<span dir="ltr">${hm(s.from)}–${hm(s.to)}</span>`}${s.price ? ` · ${money(s.price)} לניקיון` : ''}` : '';
+    const chipS = {offered:'<span class="chip orange">ממתין לאישור המנקה</span>', accepted:'<span class="chip green">פעיל</span>', declined:'<span class="chip red">המנקה לא אישר/ה</span>'}[st] || '';
+    return `<section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.cal} ניקיון קבוע</h3>${chipS}</div>
+      ${s ? `<p style="font-weight:600">${when}</p>${st === 'accepted' ? '<p class="muted small" style="margin-top:4px">הניקיונות נכנסים ללוח לבד, שבועיים קדימה. אין צורך להזמין כל פעם.</p>' : st === 'declined' ? '<p class="muted small" style="margin-top:4px">אפשר לדבר עם המנקה בצ׳אט ולשנות את ההצעה.</p>' : ''}
+        <button class="btn sm ghost" style="margin-top:10px" data-act="schedForm">שינוי</button>`
+        : `<p class="muted">קובעים פעם אחת באילו ימים מנקים, בשעות קבועות או גמיש במהלך היום. אחרי שהמנקה מאשר/ת, כל הניקיונות נכנסים ללוח לבד.</p>
+        <button class="btn sm lagoon" style="margin-top:10px" data-act="schedForm">הגדרת ניקיון קבוע</button>`}</section>`;
+  },
+  schedForm(){
+    const b = S.data.aps[0], s = b.schedule || {days:[0,2,4], flex:false, from:'08:00', to:'10:00'};
+    const DN = ['א׳','ב׳','ג׳','ד׳','ה׳','ו׳','ש׳'];
+    return `<h2>ניקיון קבוע</h2><p class="muted">${esc(b.address)} · ${esc(V.host.cname(b.cleaner_id))}</p><form data-submit="schedSave" data-b="${b.id}" data-hours="schedHours" style="margin-top:12px">
+      <div class="row between" style="margin-bottom:8px"><span class="flabel" style="margin:0">באילו ימים</span><button class="linkbtn" type="button" data-act="schedAll">כל יום</button></div>
+      <div class="days" style="margin-bottom:14px">${DN.map((n, i) => `<label><input type="checkbox" name="d" value="${i}" ${s.days.includes(i) ? 'checked' : ''} aria-label="יום ${n}"><span>${n}</span></label>`).join('')}</div>
+      ${modeSeg('schedHours', s.flex)}
+      <p class="muted small" style="margin:-4px 0 10px">גמיש: המנקה מגיע/ה מתי שנוח לו/ה באותו יום, גם מוקדם בבוקר או בערב. מה שחשוב זה שהניקיון נעשה ומתועד.</p>
+      <div class="grid2" id="schedHours" ${s.flex ? 'hidden' : ''}><label class="f"><span>מ-</span><input class="inp" type="time" name="ws" value="${hm(s.from) || '08:00'}"></label><label class="f"><span>עד</span><input class="inp" type="time" name="we" value="${hm(s.to) || '10:00'}"></label></div>
+      <label class="f"><span>מחיר לניקיון (₪)</span><input class="inp" type="number" min="0" name="price" value="${s.price ?? ''}"></label>
+      <label class="f"><span>הערה למנקה (לא חובה)</span><textarea class="inp" name="note">${esc(s.note || '')}</textarea></label>
+      <p class="muted small" style="margin-bottom:12px">ההצעה נשלחת למנקה לאישור. כל שינוי נשלח שוב לאישור.</p>
+      <button class="btn lagoon" type="submit">שליחה למנקה</button>
+      ${b.schedule ? `<button class="btn ghost sm" type="button" style="margin-top:10px;width:100%" data-act="schedStop" data-b="${b.id}">הפסקת הניקיון הקבוע</button>` : ''}</form>`;
+  },
+  trustCard(b){
+    const tr = (S.data.trust || []).find(x => x.cleaner_id === b.cleaner_id); if (!tr) return '';
+    const name = esc(V.host.cname(b.cleaner_id));
+    if (tr.auto_approve) return `<section class="card" style="margin-top:12px;display:flex;gap:12px;align-items:center"><span class="ic lime">${ICON.check}</span>
+      <div style="flex:1"><b>אישור אוטומטי פעיל</b><p class="muted small">כש${name} מסמן/ת הגעה ומסיים/ת עם כל התמונות, הניקיון מאושר מיד. פנייה של דייר על ניקיון עוצרת את זה לבד.</p></div>
+      <button class="btn xs ghost" data-act="trustSet" data-id="${b.cleaner_id}">כיבוי</button></section>`;
+    if (tr.streak >= 3) return `<section class="card lime" style="margin-top:12px"><div class="card-h"><h3>${ICON.check} ${name} ניקה/תה ${tr.streak} פעמים ברצף בלי הערות</h3></div>
+      <p>אפשר להפסיק לבדוק כל ניקיון: כשהמנקה מסמן/ת הגעה ומסיים/ת עם הצ׳ק-ליסט והתמונות, הניקיון יאושר מיד. אם דייר ידווח על בעיה, האישור האוטומטי ייעצר לבד.</p>
+      <button class="btn sm" style="margin-top:12px" data-act="trustSet" data-id="${b.cleaner_id}" data-on="1">הפעלת אישור אוטומטי</button></section>`;
+    const paused = tr.auto_paused_at ? `האישור האוטומטי הושהה ב-${fmtShort(ilDate(tr.auto_paused_at))} בגלל פנייה של דייר. ` : '';
+    if (tr.streak === 2 || paused) return `<div class="alert info" style="margin-top:12px">${paused}${tr.streak === 2 ? `עוד ניקיון תקין אחד של ${name}, ותוכלו להפעיל אישור אוטומטי.` : `אחרי ${3 - tr.streak} ניקיונות תקינים ברצף אפשר להפעיל שוב.`}</div>`;
+    return '';
   },
   clean(){
     const d = S.data, td = today(), b = d.aps[0];
@@ -1649,7 +1803,7 @@ V.committee = {
       ${past.length ? `<div class="sec-h"><h2>ניקיונות שבוצעו</h2></div><p class="muted small" style="margin:-4px 0 10px">ניקיון מאושר אוטומטית 48 שעות אחרי הסיום, אלא אם דייר פתח פנייה על ניקיון.</p>
         <div class="card"><ul class="rows">${past.map(t => `<li class="rowi"><span class="ic ${t.status === 'approved' ? 'lime' : 'orange'}">${t.status === 'approved' ? ICON.check : ICON.clock}</span>
         <span class="mid"><b>${fmtShort(t.task_date)}${t.finished_at ? `, ${fmtTime(t.finished_at)}` : ''}</b><span>${esc(V.host.cname(t.primary_cleaner))}${t.rating ? ` · ${'★'.repeat(t.rating)}` : ''}${t.status === 'submitted' ? ' · ממתין לאישור אוטומטי' : ''}</span></span>
-        <span class="end">${t.status === 'submitted' ? `<button class="btn xs green" data-act="hostApprove" data-id="${t.id}">אישור</button>` : t.paid_at ? '<span class="chip green">שולם</span>' : t.price ? `<button class="btn xs lagoon" data-act="hostPaid" data-id="${t.id}">שילמתי ${money(t.price)}</button>` : ''}</span></li>`).join('')}</ul></div>` : ''}`;
+        <span class="end" style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">${t.approved_via === 'trust' ? '<span class="tag">אושר אוטומטית</span>' : t.approved_via === 'timeout' ? '<span class="tag">אושר אחרי 48 שעות</span>' : ''}${t.status === 'submitted' ? `<button class="btn xs green" data-act="hostApprove" data-id="${t.id}">אישור</button>` : t.paid_at ? '<span class="chip green">שולם</span>' : t.price ? `<button class="btn xs lagoon" data-act="hostPaid" data-id="${t.id}">שילמתי ${money(t.price)}</button>` : ''}</span></li>`).join('')}</ul></div>` : ''}`;
   },
   docs(){
     const d = S.data, b = d.aps[0];
@@ -1722,7 +1876,7 @@ const usualText = pat => {
   return `בדרך כלל ${days.length === 1 ? 'ביום' : 'בימים'} ${days.map(x => DOW[x.dow]).join(days.length === 2 ? ' ו' : ', ')}, בסביבות ${String(h).padStart(2, '0')}:00`;
 };
 const nextText = n => !n ? '' : n.status === 'in_progress' || n.status === 'arrived' ? 'המנקה בבניין עכשיו'
-  : `הניקיון הבא: ${n.date === today() ? 'היום' : n.date === addDays(today(), 1) ? 'מחר' : 'יום ' + DOW[new Date(n.date + 'T12:00:00Z').getUTCDay()] + ', ' + fmtShort(n.date).split(', ').pop()}${n.from ? `, <span dir="ltr">${String(n.from).slice(0, 5)}–${String(n.to || '').slice(0, 5)}</span>` : ''}`;
+  : `הניקיון הבא: ${n.date === today() ? 'היום' : n.date === addDays(today(), 1) ? 'מחר' : 'יום ' + DOW[new Date(n.date + 'T12:00:00Z').getUTCDay()] + ', ' + fmtShort(n.date).split(', ').pop()}${!n.from ? '' : isFlex(n.from, n.to) ? ', במהלך היום' : `, <span dir="ltr">${String(n.from).slice(0, 5)}–${String(n.to || '').slice(0, 5)}</span>`}`;
 
 const pubApi = {
   async get(t, b, key){
@@ -2063,7 +2217,7 @@ V.admin = {
         <div class="kpi"><b>${tasks.length}</b><span>ניקיונות ביום</span></div>
         <div class="kpi"><b style="color:${cnt(t => !t.primary_cleaner) ? 'var(--orange)' : 'inherit'}">${cnt(t => !t.primary_cleaner)}</b><span>ללא מנקה</span></div>
         <div class="kpi"><b>${cnt(t => ['arrived','in_progress','submitted','needs_fix'].includes(t.status))}</b><span>בשטח / בבקרה</span></div>
-        <div class="kpi"><b style="color:var(--green)">${cnt(t => t.status === 'approved')}</b><span>מוכנות לאורחים</span></div>
+        <div class="kpi"><b style="color:var(--green)">${cnt(t => t.status === 'approved')}</b><span>אושרו</span></div>
       </div>
       ${tasks.length ? order.map(g => `<section class="grp"><div class="grp-h">${esc(g)} ${d.complexes.find(c => c.name === g)?.is_premium ? '<span class="tag gold">פרימיום</span>' : ''}<span class="muted small">${groups[g].length}</span></div>
         ${groups[g].map(t => { const a = t.apartment || {}; const prem = a.is_premium || a.complex?.is_premium; const pc = d.profiles.find(p => p.id === t.primary_cleaner);
@@ -2239,7 +2393,7 @@ const ACT = {
       <div class="row" style="margin-top:16px"><button class="btn ghost" data-act="signout">${DEMO ? 'יציאה מההדגמה' : 'יציאה מהחשבון'}</button></div>`;
     paint();
   },
-  closeModal(el, e){ if (e.target !== el && !el.dataset.force) return; S.modal = null; askResolve?.(null); askResolve = null; paint(); },
+  closeModal(el, e){ if (e.target !== el && !el.dataset.force) return; S.modal = null; S.chat = null; clearInterval(chatPoll); askResolve?.(null); askResolve = null; paint(); },
   closeLb(){ S.lb = null; paint(); },
   zoom(el){ if (el.src) { S.lb = el.src; paint(); } },
   tab(el){ S.tab[el.dataset.key] = el.dataset.id; S.taskId = null; scrollTo(0,0); paint(); },
@@ -2423,9 +2577,10 @@ const ACT = {
   async kActivate(el){ await run(async () => { await api.upd('apartments', el.dataset.id, {connection_status:'active'}); await refresh(true); }, 'הדף המלא פעיל לדיירים'); },
   kOrder(){
     const b = S.data.aps[0]; if (!b?.cleaner_id) return toast('בחרו קודם מנקה לבניין', 'err');
-    S.modal = `<h2>הזמנת ניקיון</h2><p class="muted">${esc(b.address)} · ${esc(V.host.cname(b.cleaner_id))}</p><form data-submit="kOrder" data-b="${b.id}" style="margin-top:12px">
+    S.modal = `<h2>הזמנת ניקיון חד-פעמי</h2><p class="muted">${esc(b.address)} · ${esc(V.host.cname(b.cleaner_id))}</p><form data-submit="kOrder" data-b="${b.id}" data-hours="orderHours" style="margin-top:12px">
       <label class="f"><span>תאריך</span><input class="inp" type="date" name="date" min="${today()}" value="${today()}" required></label>
-      <div class="grid2"><label class="f"><span>מ-</span><input class="inp" type="time" name="ws" value="08:00" required></label><label class="f"><span>עד</span><input class="inp" type="time" name="we" value="10:00" required></label></div>
+      ${modeSeg('orderHours')}
+      <div class="grid2" id="orderHours"><label class="f"><span>מ-</span><input class="inp" type="time" name="ws" value="08:00"></label><label class="f"><span>עד</span><input class="inp" type="time" name="we" value="10:00"></label></div>
       <label class="f"><span>המחיר שסוכם עם המנקה (₪)</span><input class="inp" type="number" min="0" name="price" required></label>
       <label class="f"><span>הערה למנקה (לא חובה)</span><textarea class="inp" name="note"></textarea></label>
       <p class="muted small" style="margin-bottom:12px">הניקיון נשלח למנקה לאישור. התשלום ישירות למנקה.</p>
@@ -2533,6 +2688,31 @@ const ACT = {
   aptForm(el){ const a = el.dataset.id ? S.data.aps.find(x => x.id === el.dataset.id) : {}; S.modal = V.admin.aptForm(a); paint(); }
 };
 Object.assign(ACT, {
+  chatOpen(){
+    const peers = chatPeers();
+    if (peers.length === 1) return ACT.chatWith({dataset:{id:peers[0].id, name:peers[0].full_name}});
+    S.chat = {other:null}; paint();
+  },
+  async chatWith(el){
+    S.chat = {other:el.dataset.id, name:el.dataset.name || (chatPeers().find(c => c.id === el.dataset.id)?.full_name) || ''};
+    await chatRefresh(); setTimeout(() => document.getElementById('chatInput')?.focus(), 60);
+    clearInterval(chatPoll); if (!DEMO) chatPoll = setInterval(() => { if (S.chat?.other && !document.hidden) chatRefresh(); else if (!S.chat) clearInterval(chatPoll); }, 12000);
+  },
+  async trustSet(el){
+    const on = !!el.dataset.on;
+    if (!on && !DEMO && !confirm('לכבות את האישור האוטומטי? מעכשיו תאשרו כל ניקיון בעצמכם (או שיאושר לבד אחרי 48 שעות).')) return;
+    await run(async () => { await api.rpc('set_auto_approve', {p_cleaner:el.dataset.id, p_on:on}); await refresh(true); }, on ? 'האישור האוטומטי הופעל' : 'האישור האוטומטי כובה');
+  },
+  schedForm(){ S.modal = V.committee.schedForm(); paint(); },
+  schedAll(){ const boxes = [...document.querySelectorAll('.sheet .days input')], all = boxes.every(b => b.checked); boxes.forEach(b => b.checked = !all); },
+  async schedStop(el){
+    if (!DEMO && !confirm('להפסיק את הניקיון הקבוע? ניקיונות עתידיים שעוד לא התחילו יבוטלו.')) return;
+    await run(async () => { await api.rpc('set_schedule', {p_building:el.dataset.b, p_days:[], p_flex:false, p_from:null, p_to:null, p_price:null, p_note:null}); S.modal = null; await refresh(true); }, 'הניקיון הקבוע הופסק');
+  },
+  async schedResp(el){
+    const ok = !!el.dataset.ok;
+    await run(async () => { const n = await api.rpc('respond_schedule', {p_building:el.dataset.id, p_accept:ok}); await refresh(true); if (ok) toast(`אישרת. נוספו ${n || 0} ניקיונות לשבועיים הקרובים`); }, ok ? null : 'ההצעה נדחתה');
+  },
   async impersonate(el){
     const w = window.open('', '_blank');
     try {
@@ -2571,6 +2751,7 @@ Object.assign(ACT, {
   async ntcDel(el){ if (!DEMO && !confirm('למחוק את ההודעה? היא תיעלם אצל כולם.')) return; try { await api.noticeDel(el.dataset.id); toast('ההודעה נמחקה'); await refresh(true); } catch (e) { toast(e.message, 'err'); } }
 });
 const CHG = {
+  schedMode(el){ const box = document.getElementById(el.form?.dataset.hours || 'schedHours'); if (box) box.hidden = el.value === 'flex'; },
   ntcAud(el){ const v = el.value; document.getElementById('ntcBld').hidden = v === 'user' || v === 'members'; document.getElementById('ntcUser').hidden = v !== 'user'; },
   demoRole(el){ D.cur = el.value; S.tab = {}; S.taskId = null; S.ob = {step:0, answers:{}}; boot(); },
   async photo(el){
@@ -2616,6 +2797,23 @@ const CHG = {
     await run(async () => { await api.rpc('admin_set_verified', {p_user:p.id, p_verified:el.value === 'paid' ? true : el.value === 'refunded' ? false : p.is_verified, p_deposit_status:el.value}); await refresh(true); }, 'עודכן'); }
 };
 const SUB = {
+  async chatSend(f){
+    const body = f.body.value.trim(); if (!body || !S.chat?.other) return;
+    const me = S.profile, other = S.chat.other, host = me.role === 'host';
+    f.body.value = '';
+    try { await api.chatSend({host_id:host ? me.id : other, cleaner_id:host ? other : me.id, sender_id:me.id, body}); await chatRefresh(); }
+    catch (e) { f.body.value = body; toast(/row-level|policy/i.test(e.message) ? 'אפשר לכתוב רק למי שיש איתו חיבור.' : e.message, 'err'); }
+  },
+  async schedSave(f){
+    const days = [...f.querySelectorAll('input[name=d]:checked')].map(i => +i.value), flex = f.mode.value === 'flex';
+    if (!days.length) return toast('בחרו לפחות יום אחד', 'err');
+    if (!flex && f.we.value <= f.ws.value) return toast('שעת הסיום צריכה להיות אחרי שעת ההתחלה', 'err');
+    await run(async () => {
+      const st = await api.rpc('set_schedule', {p_building:f.dataset.b, p_days:days, p_flex:flex, p_from:flex ? null : f.ws.value, p_to:flex ? null : f.we.value, p_price:+f.price.value || null, p_note:f.note.value.trim() || null});
+      S.modal = null; await refresh(true);
+      toast(st === 'offered' ? 'נשלח למנקה לאישור. אחרי האישור הניקיונות ייכנסו ללוח לבד.' : 'נשמר. אחרי שתבחרו מנקה, הוא יקבל את ההצעה.');
+    });
+  },
   async userCreate(f){
     const v = Object.fromEntries(new FormData(f));
     try { await api.adminTools({action:'create_user', email:v.email.trim(), full_name:v.full_name.trim(), phone:v.phone.trim(), role:v.role});
@@ -2716,10 +2914,10 @@ const SUB = {
     });
   },
   async kOrder(f){
-    const b = S.data.aps.find(a => a.id === f.dataset.b);
-    if (f.we.value <= f.ws.value) return toast('שעת הסיום צריכה להיות אחרי שעת ההתחלה', 'err');
+    const b = S.data.aps.find(a => a.id === f.dataset.b), flex = f.mode.value === 'flex';
+    if (!flex && f.we.value <= f.ws.value) return toast('שעת הסיום צריכה להיות אחרי שעת ההתחלה', 'err');
     await run(async () => {
-      await api.ins('tasks', {apartment_id:b.id, task_date:f.date.value, window_start:f.ws.value, window_end:f.we.value, price:+f.price.value, request_note:f.note.value.trim() || null, source:'host', primary_cleaner:b.cleaner_id, offer_status:'offered', ...(DEMO ? {host_id:b.host_id} : {})});
+      await api.ins('tasks', {apartment_id:b.id, task_date:f.date.value, window_start:flex ? '00:00' : f.ws.value, window_end:flex ? '23:59' : f.we.value, price:+f.price.value, request_note:f.note.value.trim() || null, source:'host', primary_cleaner:b.cleaner_id, offer_status:'offered', ...(DEMO ? {host_id:b.host_id} : {})});
       S.modal = null; await refresh(true);
     }, `נשלח ל${V.host.cname(b.cleaner_id)} לאישור`);
   },
@@ -2808,6 +3006,9 @@ function live(){
       if (S.profile?.role === 'cleaner' && p.new?.offer_status === 'offered' && p.new?.primary_cleaner === S.profile.id) toast('הצעת עבודה חדשה');
       refresh(true);
     }, 700);
+  }).on('postgres_changes', {event:'INSERT', schema:'public', table:'messages'}, p => {
+    if (p.new?.sender_id && p.new.sender_id !== S.profile?.id && S.chat?.other !== p.new.sender_id) toast('הודעה חדשה בצ׳אט');
+    chatRefresh();
   }).subscribe();
 }
 async function boot(){
@@ -2821,7 +3022,7 @@ async function boot(){
   }
   if (qs.get('view') === 'nfc-writer') S.tab.a = 'nfc';
   try {
-    if (DEMO) { if (!D.tasks) { D.init(); if (['committee','host','admin','new'].includes(qs.get('as'))) D.cur = qs.get('as'); } S.cfg = D.settings; S.profile = D.me(); await loadNotices(); route(); if (!IMP) setTimeout(() => INST.maybe(), 1200); return; }
+    if (DEMO) { if (!D.tasks) { D.init(); if (['committee','host','admin','new'].includes(qs.get('as'))) D.cur = qs.get('as'); } S.cfg = D.settings; S.profile = D.me(); await loadNotices(); await loadChat(); route(); if (!IMP) setTimeout(() => INST.maybe(), 1200); return; }
     if (!window.supabase) { S.profile = null; route(); return toast('לא הצלחנו להתחבר לשרת. בדקו את החיבור לאינטרנט.', 'err'); }
     if (!sb) {
       sb = supabase.createClient(CFG.url, CFG.key, IMP
@@ -2842,7 +3043,7 @@ async function boot(){
     if (errDesc) { toast('ההתחברות נכשלה: ' + errDesc, 'err'); history.replaceState(null, '', location.pathname); }
     try { S.cfg = await q(sb.from('settings').select('*').eq('id', 1).single()); } catch { S.cfg = {}; }
     S.profile = await api.me();
-    await loadNotices();
+    await loadNotices(); await loadChat();
     if (location.search.includes('code=')) history.replaceState(null, '', location.pathname + (qs.has('demo') ? '?demo' : ''));
     route(); live(); if (!IMP) setTimeout(() => INST.maybe(), 1200);
   } catch (e) { console.error(e); toast(e.message, 'err'); S.profile = null; route(); }
