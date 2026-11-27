@@ -285,6 +285,17 @@ textarea.inp{min-height:90px;resize:vertical;padding-top:14px}
 @keyframes fd{from{opacity:0}}
 .toast{position:fixed;z-index:60;left:50%;bottom:calc(96px + var(--safe-b));transform:translateX(-50%);background:var(--forest);color:#fff;padding:12px 20px;border-radius:999px;font-weight:500;box-shadow:0 12px 30px -10px rgba(0,0,0,.4);max-width:calc(100vw - 32px);animation:up .2s}
 .toast.err{background:var(--red)}
+[hidden]{display:none!important}
+.impbar{position:sticky;top:0;z-index:40;display:flex;gap:10px;align-items:center;justify-content:space-between;background:#B42318;color:#fff;padding:10px 14px;font-size:14px;line-height:1.4}
+.impbar .btn{background:#fff;color:#B42318;flex:none}
+.ntc-wrap{padding-top:10px;padding-bottom:0}
+.ntc{display:flex;gap:12px;align-items:flex-start;background:#fff;border-radius:20px;padding:14px;margin-top:10px;box-shadow:inset 0 0 0 1.5px var(--lime2)}
+.ntc.alert{box-shadow:inset 0 0 0 1.5px var(--orange);background:#FFF6EE}
+.ntc.tip{background:var(--lime-soft);box-shadow:none}
+.ntc .mid{flex:1;min-width:0}.ntc b{display:block;font-size:15px}.ntc p{margin:2px 0 4px;color:var(--ink2);font-size:14px;line-height:1.45;white-space:pre-line}.ntc small{color:var(--muted);font-size:12px}
+.ntc .btn{flex:none}
+.ntc .ic{width:38px;height:38px;border-radius:12px;background:var(--lime);color:var(--forest);display:grid;place-items:center;flex:none}.ntc .ic svg{width:20px;height:20px}
+.ntc.alert .ic{background:var(--orange);color:#fff}.ntc.tip .ic{background:#fff}
 .inst{position:fixed;z-index:45;left:50%;bottom:calc(84px + var(--safe-b));transform:translateX(-50%);width:min(460px,calc(100% - 24px));background:#fff;border-radius:24px;padding:16px;box-shadow:0 18px 40px -14px rgba(20,23,28,.4);display:flex;gap:12px;align-items:flex-start;animation:up .25s}
 .inst img{width:52px;height:52px;flex:none}
 .inst b{display:block;font-size:16px;margin-bottom:2px}
@@ -352,6 +363,15 @@ const qs = new URLSearchParams(location.search);
 if (qs.get('ref')) localStorage.setItem('ce_ref', qs.get('ref'));
 let DEMO = qs.has('demo');
 try { sessionStorage.removeItem('ce_demo'); } catch {}
+// Super-admin "sign in as" tab: the session lives in this tab's sessionStorage only, so the admin's own session is untouched.
+const IMP = (() => { try {
+  if (qs.get('imp') === '1') {
+    const h = JSON.parse(localStorage.getItem('ce_imp_handoff') || 'null'); localStorage.removeItem('ce_imp_handoff');
+    if (h && Date.now() - h.ts < 120000) sessionStorage.setItem('ce_imp', JSON.stringify({name:h.name || '', token:h.token_hash || null}));
+    else if (DEMO) sessionStorage.setItem('ce_imp', JSON.stringify({name:qs.get('name') || '', token:null}));
+  }
+  return JSON.parse(sessionStorage.getItem('ce_imp') || 'null');
+} catch { return null; } })();
 let sb = null;
 const app = document.getElementById('app');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -436,7 +456,7 @@ const D = {
     const td = today();
     const P = (id, o) => Object.assign({id, email:id + '@demo.co.il', phone:'050-0000000', status:'approved', is_verified:false, deposit_status:'none', referral_code:id.toUpperCase() + '77', referred_by:null, onboarding:{}, created_at:addDays(td,-40) + 'T08:00:00Z'}, o);
     this.profiles = [
-      P('a1',{full_name:'משה', role:'admin'}),
+      P('a1',{full_name:'משה', role:'admin', is_super:true}),
       P('c1',{full_name:'דנה לוי', role:'cleaner', business_type:'osek_zair', business_number:'312456789', area:'שחמון', bio:'4 שנים בניקיון דירות נופש בטרמינל ובשחמון. מגיעה עם חומרים.', prices:{studio:120, '1':150, '2':180, '3':230}, payment_info:'ביט 050-1234567', rating:4.9, rating_count:23}),
       P('c2',{full_name:'יוסי מזרחי', role:'cleaner', business_type:'osek_zair', area:'מרכז העיר', prices:{studio:110, '1':140, '2':170}, payment_info:'ביט 052-7654321', rating:4.6, rating_count:9}),
       P('c3',{full_name:'מרים אבוטבול', role:'cleaner', business_type:'osek_murshe', area:'צופית', bio:'ניסיון במלונות. זמינה גם בסופי שבוע.', prices:{'1':160, '2':190, '3':240}, payment_info:'העברה בנקאית', rating:5, rating_count:4}),
@@ -504,6 +524,10 @@ const D = {
     });
     this.tokens = {bd1:{building_id:'bd1', resident_token:'d1'.repeat(16), supplier_token:'51'.repeat(16)}, bd2:{building_id:'bd2', resident_token:'d2'.repeat(16), supplier_token:'52'.repeat(16)}};
     this.issueVotes = new Set();
+    this.notices = [{id:'nt1', audience:'committee', building_id:null, user_id:null, kind:'tip', title:'חדש: הורדת כל הקבלות של החודש', body:'בלשונית ״קבלות״ אפשר להוריד את כל הקבלות של החודש בקובץ אחד.', active:true, expires_at:null, created_by:'a1', created_at:addDays(td,-1) + 'T08:00:00Z'},
+      {id:'nt2', audience:'residents', building_id:'bd1', user_id:null, kind:'notice', title:'ביום ראשון יש ניקיון יסודי', body:'נא לא להשאיר נעליים ועגלות בחדר המדרגות.', active:true, expires_at:null, created_by:'a1', created_at:addDays(td,-2) + 'T08:00:00Z'}];
+    this.noticeReads = [];
+    this.audit = [];
     this.issues = [{id:'i1', building_id:'bd1', category:'cleaning', body:'חדר האשפה לא נוקה מאז יום ראשון', status:'open', me_too:2, device_id:'00000000-0000-4000-8000-000000000001', created_at:addDays(td,-1) + 'T17:20:00Z'},
       {id:'i2', building_id:'bd1', category:'maintenance', body:'נורה שרופה בקומה 3', status:'handled', created_at:addDays(td,-6) + 'T09:00:00Z'}];
     this.building_receipts.forEach(r => r.source ??= 'committee');
@@ -543,6 +567,26 @@ const D = {
     const f = fd.get('file'), url = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(f); });
     this.building_receipts.push({id:uid(), building_id:i.building_id, title:fd.get('title'), vendor_name:fd.get('vendor') || null, amount:fd.get('amount') === '' ? null : +fd.get('amount'), receipt_date:fd.get('date'), file_path:url, source:'supplier', created_at:nowIso()});
     return {ok:true}; },
+  noticeVisible(n, p){
+    if (!n.active || (n.expires_at && n.expires_at < nowIso()) || !p || p.status !== 'approved') return false;
+    const mine = a => this.apartments.some(x => x.id === n.building_id && x[a] === p.id);
+    return (n.audience === 'members' && ['host','cleaner'].includes(p.role)) || (n.audience === 'committee' && p.role === 'host' && (!n.building_id || mine('host_id')))
+      || (n.audience === 'cleaner' && p.role === 'cleaner' && (!n.building_id || mine('cleaner_id'))) || (n.audience === 'user' && n.user_id === p.id);
+  },
+  adminTools(b){
+    const t = this.profiles.find(p => p.id === b.user_id);
+    if (b.action === 'impersonate') { if (!t) throw new Error('המשתמש לא נמצא'); this.audit.unshift({action:'impersonate', target_user:t.id, detail:{name:t.full_name}, created_at:nowIso()}); return {name:t.full_name, role:t.role}; }
+    if (b.action === 'create_user') {
+      if (this.profiles.some(p => p.email === b.email)) throw new Error(ADM_ERR.exists);
+      const id = 'u' + Date.now(); this.profiles.unshift({id, email:b.email, full_name:b.full_name, phone:b.phone, role:b.role, status:'approved', onboarding:b.role === 'host' ? {kind:'committee'} : {}, created_at:nowIso()});
+      this.audit.unshift({action:'create_user', target_user:id, detail:{email:b.email, role:b.role}, created_at:nowIso()}); return {id};
+    }
+    if (b.action === 'block') { t.blocked_at = b.on ? nowIso() : null; this.audit.unshift({action:b.on ? 'block' : 'unblock', target_user:t.id, detail:{name:t.full_name}, created_at:nowIso()}); return {ok:true}; }
+    if (b.action === 'delete_user') {
+      if (this.tasks.some(x => [x.host_id, x.primary_cleaner, x.backup_cleaner].includes(t.id))) throw Object.assign(new Error(ADM_ERR['has history']), {code:'has history'});
+      this.profiles = this.profiles.filter(p => p.id !== t.id); this.audit.unshift({action:'delete_user', target_user:null, detail:{name:t.full_name}, created_at:nowIso()}); return {ok:true};
+    }
+  },
   buildingPublic(t, b, key, dev){
     const id = b || this.nfc.find(x => x.tag_id === t)?.building_id, ap = this.apartments.find(x => x.id === id && x.kind === 'building' && !x.deleted_at);
     if (!ap) return null;
@@ -557,6 +601,7 @@ const D = {
         .reduce((m, x) => { const d = new Date(x.finished_at), dow = new Date(d.getTime() + 2 * 36e5).getUTCDay(), h = (d.getUTCHours() + 2) % 24; (m[dow] ??= {dow, n:0, hs:[]}).n++; m[dow].hs.push(h); return m; }, {}))
         .map(x => ({dow:x.dow, n:x.n, hour:Math.round(x.hs.reduce((a, z) => a + z, 0) / x.hs.length)})),
       open_issues:ok ? this.issues.filter(i => i.building_id === ap.id && i.status === 'open').sort((x, y) => (y.me_too || 0) - (x.me_too || 0)).map(i => ({id:i.id, category:i.category, body:i.body.slice(0, 160), created_at:i.created_at, me_too:i.me_too || 0, mine:i.device_id === dev || this.issueVotes.has(i.id + dev)})) : [],
+      notices:(this.notices || []).filter(n => n.audience === 'residents' && n.active && (!n.building_id || n.building_id === ap.id)).slice(0, 3),
       my_issues:ok && dev ? this.issues.filter(i => i.building_id === ap.id && i.device_id === dev).sort((x, y) => y.created_at.localeCompare(x.created_at)).slice(0, 5) : [],
       last_cleaning:last ? {finished_at:last.finished_at, started_at:last.started_at, arrived_at:last.arrived_at, photos:last.photos, checklist:last.checklist, approved:last.status === 'approved'} : null,
       receipts:ok ? this.building_receipts.filter(r => r.building_id === ap.id).sort((x, y) => y.receipt_date.localeCompare(x.receipt_date)).slice(0, 30).map(r => ({...r, file_url:r.file_path})) : [],
@@ -688,12 +733,77 @@ const D = {
 /* ═════════════ data layer ═════════════ */
 const TASK_SEL = '*, apartment:apartments(id,name,address,city,kind,size,notes,is_premium,host_id,host_price,rate_base,rate_max,complex:complexes(id,name,is_premium))';
 async function q(p){ const {data, error} = await p; if (error) throw new Error(error.message); return data; }
+const ADM_ERR = {forbidden:'רק סופר אדמין יכול לעשות את זה.', exists:'כבר יש משתמש עם המייל הזה.', 'has history':'למשתמש יש היסטוריה במערכת (ניקיונות, קבלות או הודעות), ולכן אי אפשר למחוק אותו. אפשר לחסום אותו במקום.',
+  'not found':'המשתמש לא נמצא.', 'bad input':'בדקו את המייל והתפקיד.', unauthorized:'צריך להתחבר מחדש.', self:'זה החשבון שלך.', 'link failed':'לא הצלחנו לפתוח כניסה בשם המשתמש. נסו שוב.'};
+const ROLE_HE = {admin:'מנהל', host:'ועד בית', cleaner:'מנקה', pending:'בהרשמה'};
+const AUD_HE = {members:'כל המנקים וועדי הבית', committee:'ועדי בית', cleaner:'מנקים', residents:'דיירים (בדף הבניין)', user:'משתמש מסוים'};
+const KIND_HE = {notice:'הודעה', tip:'טיפ / הצעה', alert:'חשוב'};
+function impBar(){
+  return `<div class="impbar" role="status"><span>מצב מנהל: את/ה בתוך החשבון של <b>${esc(IMP.name || S.profile?.full_name || 'משתמש')}</b>. כל שינוי נשמר אצלו.</span><button class="btn xs" data-act="impExit">יציאה</button></div>`;
+}
+function noticeCard(n, btn){
+  return `<section class="ntc ${n.kind === 'alert' ? 'alert' : n.kind === 'tip' ? 'tip' : ''}"><span class="ic">${ICON.bell}</span>
+    <div class="mid"><b>${esc(n.title)}</b>${n.body ? `<p>${esc(n.body)}</p>` : ''}<small>מצוות ועדלי · ${fmtShort(ilDate(n.created_at))}</small></div>
+    ${btn ? `<button class="btn xs ghost" data-act="ntcRead" data-id="${n.id}">הבנתי</button>` : ''}</section>`;
+}
+const noticesBar = () => `<div class="shell ntc-wrap">${S.notices.slice(0, 3).map(n => noticeCard(n, true)).join('')}</div>`;
+async function loadNotices(){
+  const p = S.profile;
+  if (!p || p.role === 'admin' || p.status !== 'approved') { S.notices = []; return; }
+  try { S.notices = await api.myNotices(); } catch { S.notices = []; }
+}
 const api = {
   async me(){
     if (DEMO) return D.me();
     const {data:{session}} = await sb.auth.getSession();
     if (!session) return null;
     return q(sb.from('profiles').select('*').eq('id', session.user.id).single());
+  },
+  async adminTools(body){
+    if (DEMO) return D.adminTools(body);
+    const {data:{session}} = await sb.auth.getSession();
+    const r = await fetch(`${CFG.url}/functions/v1/admin-tools`, {method:'POST', headers:{apikey:CFG.key, Authorization:'Bearer ' + (session?.access_token || ''), 'Content-Type':'application/json'}, body:JSON.stringify(body)});
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw Object.assign(new Error(ADM_ERR[j.error] || 'הפעולה נכשלה. נסו שוב.'), {code:j.error});
+    return j;
+  },
+  async profileUpd(id, patch){
+    if (DEMO) { Object.assign(D.profiles.find(p => p.id === id), patch); return; }
+    await q(sb.from('profiles').update(patch).eq('id', id));
+  },
+  async notices(){
+    if (DEMO) return D.notices.map(n => ({...n, reads:D.noticeReads.filter(r => r.notice_id === n.id).length}));
+    const [ns, rs] = await Promise.all([q(sb.from('notices').select('*').order('created_at', {ascending:false}).limit(100)), q(sb.from('notice_reads').select('notice_id'))]);
+    return ns.map(n => ({...n, reads:rs.filter(r => r.notice_id === n.id).length}));
+  },
+  async myNotices(){
+    if (DEMO) { const me = D.me(); return D.notices.filter(n => D.noticeVisible(n, me) && !D.noticeReads.some(r => r.notice_id === n.id && r.user_id === me.id)); }
+    const [ns, rs] = await Promise.all([q(sb.from('notices').select('id, kind, title, body, created_at').order('created_at', {ascending:false}).limit(10)), q(sb.from('notice_reads').select('notice_id').eq('user_id', S.profile.id))]);
+    return ns.filter(n => !rs.some(r => r.notice_id === n.id));
+  },
+  async noticeRead(id){
+    if (DEMO) { D.noticeReads.push({notice_id:id, user_id:D.me().id}); return; }
+    await q(sb.from('notice_reads').insert({notice_id:id, user_id:S.profile.id}));
+  },
+  async noticeAdd(row){
+    if (DEMO) { D.notices.unshift({id:'nt' + Date.now(), active:true, created_by:S.profile.id, created_at:nowIso(), ...row}); return; }
+    await q(sb.from('notices').insert({...row, created_by:S.profile.id}));
+  },
+  async noticeUpd(id, patch){
+    if (DEMO) { Object.assign(D.notices.find(n => n.id === id), patch); return; }
+    await q(sb.from('notices').update(patch).eq('id', id));
+  },
+  async noticeDel(id){
+    if (DEMO) { D.notices = D.notices.filter(n => n.id !== id); return; }
+    await q(sb.from('notices').delete().eq('id', id));
+  },
+  async audit(){
+    if (DEMO) return D.audit.slice(0, 30);
+    return q(sb.from('admin_audit').select('*').order('created_at', {ascending:false}).limit(30));
+  },
+  async allTokens(){
+    if (DEMO) return Object.values(D.tokens);
+    return q(sb.from('building_tokens').select('building_id, resident_token, supplier_token'));
   },
   rpc(fn, args = {}){ return DEMO ? Promise.resolve(D.rpc(fn, args)) : q(sb.rpc(fn, args)); },
   async upload(bucket, path, blob){
@@ -903,7 +1013,9 @@ async function run(fn, okMsg){
 function paint(){
   if (!S.view) return;
   const y = scrollY;
-  app.innerHTML = S.view.html()
+  let html = S.view.html();
+  if (S.notices?.length && S.profile && S.view !== V.building && S.view !== V.supplier) html = html.replace('</header>', '</header>' + noticesBar());
+  app.innerHTML = (IMP ? impBar() : '') + html
     + (S.modal ? `<div class="ov" data-act="closeModal"><div class="sheet" role="dialog" aria-modal="true">${S.modal}</div></div>` : '')
     + (S.lb ? `<div class="lb" data-act="closeLb"><img src="${esc(S.lb)}" alt="תמונה מוגדלת"></div>` : '');
   scrollTo(0, y);
@@ -966,6 +1078,8 @@ const authBlock = role => `<div class="auth">
   </details>
 </div>`;
 const V = {};
+V.blocked = {html(){ return topbar() + `<main class="shell"><section class="card" style="margin-top:20px"><h2 style="font-size:20px">החשבון חסום</h2>
+  <p class="muted" style="margin:6px 0 16px">החשבון הזה הושעה. לפרטים פנו לצוות ועדלי.</p><button class="btn ghost" data-act="signout">יציאה מהחשבון</button></section></main>`; }};
 const lpSeg = () => `<div class="seg" role="group" aria-label="למי האתר" style="max-width:420px">${[['committee','ועד בית'], ['cleaner','אני מנקה']].map(([v, l]) => `<button aria-pressed="${S.lpAud === v}" data-act="lpAud" data-v="${v}">${l}</button>`).join('')}</div>`;
 V.landing = {
   committee(){
@@ -1700,8 +1814,8 @@ V.building = {
     const lc = b.last_cleaning, when = lc ? (lc.finished_at || lc.started_at) : null;
     const done = lc?.checklist ? CHECK_B.filter(([k]) => lc.checklist[k]) : [];
     const nx = nextText(b.next_cleaning), us = usualText(b.pattern);
-    const rhythm = nx || us ? `<section class="card" style="margin-top:12px;display:flex;gap:12px;align-items:center"><span class="ic ${b.next_cleaning?.status === 'in_progress' ? 'orange' : 'lime'}">${ICON.cal}</span>
-      <div>${nx ? `<b>${nx}</b>` : ''}${us ? `<p class="muted small" style="margin-top:${nx ? 2 : 0}px">${us}</p>` : ''}</div></section>` : '';
+    const rhythm = (b.notices || []).map(n => noticeCard(n)).join('') + (nx || us ? `<section class="card" style="margin-top:12px;display:flex;gap:12px;align-items:center"><span class="ic ${b.next_cleaning?.status === 'in_progress' ? 'orange' : 'lime'}">${ICON.cal}</span>
+      <div>${nx ? `<b>${nx}</b>` : ''}${us ? `<p class="muted small" style="margin-top:${nx ? 2 : 0}px">${us}</p>` : ''}</div></section>` : '');
     const older = (b.visits || []).slice(1, 6);
     const log = older.length ? `<section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.clock} ביקורים קודמים</h3></div>
       <ul class="rows">${older.map(v => `<li class="rowi">${v.photo ? `<img src="${esc(v.photo)}" alt="" data-act="zoom" loading="lazy" style="width:46px;height:46px;border-radius:12px;object-fit:cover;flex:none">` : `<span class="ic">${ICON.broom}</span>`}
@@ -1826,7 +1940,8 @@ V.admin = {
     const [profiles, aps, complexes, day, qa, settings, tags, bldMonth] = await Promise.all([
       api.profiles(), api.apartments(), api.complexes(), api.tasksOn(S.adminDate), api.qaTasks(), api.settings(), api.tags(), api.bldMonth()
     ]);
-    Object.assign(S.data, {profiles, aps, complexes, day, qa, settings, tags, bldMonth}); S.cfg = settings;
+    const [notices, audit, tokens] = await Promise.all([api.notices().catch(() => []), S.profile?.is_super ? api.audit().catch(() => []) : [], api.allTokens().catch(() => [])]);
+    Object.assign(S.data, {profiles, aps, complexes, day, qa, settings, tags, bldMonth, notices, audit, tokens}); S.cfg = settings;
   },
   name(id){ return S.data.profiles.find(p => p.id === id)?.full_name || '—'; },
   html(){
@@ -1834,8 +1949,8 @@ V.admin = {
     const pend = d.profiles.filter(p => p.status === 'submitted').length;
     const qaN = d.qa.filter(t => t.status === 'submitted' && !t.apartment?.host_id && t.apartment?.kind === 'building').length;
     if (S.tab.a !== 'nfc' && NFC.running) { NFC.ctrl?.abort(); NFC.running = false; }
-    const main = ({over:this.over, board:this.board, qa:this.qaView, people:this.people, apts:this.apts, bld:this.bld, nfc:this.nfc})[S.tab.a].call(this);
-    return topbar() + `<main class="shell wide">` + tabs([['over','סקירה','coins'], ['bld','בניינים','key'], ['board','ניקיונות','cal'], ['qa','תמונות','eye', qaN || ''], ['people','משתמשים','users', pend || '']], 'a', true) + main + `</main>`;
+    const main = ({over:this.over, board:this.board, qa:this.qaView, people:this.people, apts:this.apts, bld:this.bld, nfc:this.nfc, msg:this.msg})[S.tab.a].call(this);
+    return topbar() + `<main class="shell wide">` + tabs([['over','סקירה','coins'], ['bld','בניינים','key'], ['board','ניקיונות','cal'], ['qa','תמונות','eye', qaN || ''], ['people','משתמשים','users', pend || ''], ['msg','הודעות','bell']], 'a', true) + main + `</main>`;
   },
   bld(){
     const d = S.data, bs = d.aps.filter(a => a.kind === 'building' && !a.deleted_at);
@@ -1846,6 +1961,9 @@ V.admin = {
           <p class="muted small">${b.units_count ? b.units_count + ' דירות · ' : ''}${tc} מדבקות${b.connection_status === 'pending_interest' ? ` · <b>${b.interest_count || 0}</b> דיירים סימנו עניין` : ''}${b.host_id ? ' · ועד: ' + esc(this.name(b.host_id)) : ''}</p></div><span class="chip ${sc}">${sl}</span></div>
           <div class="row" style="margin-top:12px;gap:8px;flex-wrap:wrap">
             <a class="btn xs ghost" href="./?b=${b.id}${DEMO ? '&demo' : ''}" target="_blank" rel="noopener">דף הבניין</a>
+            ${(tk => tk ? `<a class="btn xs ghost" href="./?b=${b.id}&key=${tk.resident_token}${DEMO ? '&demo' : ''}" target="_blank" rel="noopener">צפייה כדייר</a><a class="btn xs ghost" href="./?s=${tk.supplier_token}${DEMO ? '&demo' : ''}" target="_blank" rel="noopener">צפייה כספק</a>` : '')((d.tokens || []).find(t => t.building_id === b.id))}
+            ${S.profile?.is_super && b.host_id ? `<button class="btn xs lagoon" data-act="impersonate" data-id="${b.host_id}">כניסה כוועד</button>` : ''}
+            ${S.profile?.is_super && b.cleaner_id ? `<button class="btn xs lagoon" data-act="impersonate" data-id="${b.cleaner_id}">כניסה כמנקה</button>` : ''}
             <button class="btn xs ghost" data-act="bldDocs" data-id="${b.id}">הצעות מחיר וקבלות</button>
             <button class="btn xs ghost" data-act="nfcOpen" data-id="${b.id}">צריבת מדבקות</button>
             <button class="btn xs ghost" data-act="bldQr" data-id="${b.id}">QR</button>
@@ -1999,17 +2117,63 @@ V.admin = {
           <button class="btn xs green" data-act="review" data-id="${p.id}" data-ok="1">אישור כ${p.desired_role === 'host' ? 'ועד בית' : 'מנקה'}</button>
           <button class="btn xs ghost" data-act="review" data-id="${p.id}">דחייה</button></div></div></div>`).join('')
         : `<div class="card"><p class="muted">אין בקשות חדשות. שלחו את קישור האתר למנקים ולוועדי בית כדי להתחיל לגייס.</p></div>`}
-      <div class="two-col" style="margin-top:8px"><section><div class="sec-h"><h2>מנקים</h2><span class="muted">${cleaners.length}</span></div>
-        ${cleaners.map(p => `<div class="card person"><span class="av">${initials(p.full_name)}</span><div class="info">
-          <div class="row between"><h3>${esc(p.full_name)}</h3>${p.status !== 'approved' ? chip('pending') : stars(p.rating, p.rating_count)}</div>
-          <div class="kv">${p.area ? `<span>${esc(p.area)}</span>` : ''}<span dir="ltr">${esc(p.phone || '')}</span>${p.payment_info ? `<span>תשלום: ${esc(p.payment_info)}</span>` : ''}</div>
-          ${!F('deposit') ? '' : `<div class="row" style="margin-top:10px"><label class="small muted">פיקדון</label>
-            <select class="inp" style="min-height:38px;width:auto;padding:0 8px" data-change="deposit" data-id="${p.id}">${[['none','לא הופקד'], ['requested','ביקש/ה להצטרף'], ['paid','הופקד'], ['refunded','הוחזר']].map(([v, l]) => `<option value="${v}" ${p.deposit_status === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
-            <button class="btn xs ${p.is_verified ? 'ghost' : 'lagoon'}" data-act="verify" data-id="${p.id}" data-v="${p.is_verified ? '' : 1}">${p.is_verified ? 'ביטול אימות' : 'סמן כמאומת'}</button></div>`}</div></div>`).join('') || '<p class="muted">אין עדיין מנקים.</p>'}
-      </section><section><div class="sec-h"><h2>ועדי בית</h2><span class="muted">${hosts.filter(p => p.onboarding?.kind === 'committee').length}</span></div>
-        ${hosts.filter(p => p.onboarding?.kind === 'committee').map(p => `<div class="card person"><span class="av">${initials(p.full_name)}</span><div class="info"><h3>${esc(p.full_name)}${p.onboarding?.kind === 'committee' ? ' <span class="tag">ועד בית</span>' : ''}</h3>
-          <div class="kv"><span>${d.aps.filter(a => a.host_id === p.id && a.kind === 'building' && !a.deleted_at).map(a => esc(a.address)).join(', ') || 'עוד בלי בניין'}</span><span dir="ltr">${esc(p.phone || '')}</span><span>${esc(p.email || '')}</span></div></div></div>`).join('') || '<p class="muted">אין עדיין בעלי דירות.</p>'}
-      </section></div>`;
+      ${this.users()}`;
+  },
+  users(){
+    const d = S.data, sup = !!S.profile?.is_super, me = S.profile?.id;
+    const bld = id => d.aps.filter(a => a.kind === 'building' && !a.deleted_at && (a.host_id === id || a.cleaner_id === id)).map(a => esc(a.address)).join(', ');
+    const list = [...d.profiles].sort((x, y) => (x.role === 'admin') - (y.role === 'admin') || (x.full_name || '').localeCompare(y.full_name || '', 'he'));
+    return `<div class="row between" style="margin:22px 0 10px"><h2 style="font-size:22px;font-weight:800">כל המשתמשים</h2>${sup ? '<button class="btn sm lagoon" data-act="userNew">הוספת משתמש</button>' : ''}</div>
+      <div class="row" style="gap:8px;margin-bottom:12px"><label class="sr" for="uq">חיפוש משתמש</label><input id="uq" class="inp" type="search" data-filter="users" placeholder="חיפוש לפי שם, מייל או טלפון" style="flex:1;min-width:180px">
+        <label class="sr" for="ur">סינון לפי תפקיד</label><select id="ur" class="inp" data-filter="users-role" style="width:auto;min-width:130px"><option value="">כולם</option><option value="host">ועדי בית</option><option value="cleaner">מנקים</option><option value="pending">בהרשמה</option><option value="admin">מנהלים</option></select></div>
+      <div id="userList">${list.map(p => `<div class="card person" data-q="${esc([p.full_name, p.email, p.phone].join(' ').toLowerCase())}" data-role="${p.role}"><span class="av">${initials(p.full_name || p.email)}</span><div class="info">
+        <div class="row between"><h3>${esc(p.full_name || 'ללא שם')}${p.is_super ? ' <span class="tag gold">סופר אדמין</span>' : ''}</h3><span class="row" style="gap:6px">${p.blocked_at ? '<span class="tag red">חסום</span>' : ''}<span class="tag">${ROLE_HE[p.role] || p.role}</span></span></div>
+        <div class="kv"><span>${esc(p.email || '')}</span>${p.phone ? `<span dir="ltr">${esc(p.phone)}</span>` : ''}${bld(p.id) ? `<span>${bld(p.id)}</span>` : ''}${p.role === 'cleaner' && p.status === 'approved' ? stars(p.rating, p.rating_count) : ''}</div>
+        <div class="row" style="margin-top:10px;gap:8px;flex-wrap:wrap">
+          ${sup && !p.is_super && p.id !== me ? `<button class="btn xs lagoon" data-act="impersonate" data-id="${p.id}">כניסה כמשתמש</button>` : ''}
+          <button class="btn xs ghost" data-act="userEdit" data-id="${p.id}">עריכה</button>
+          ${p.role !== 'admin' ? `<button class="btn xs ghost" data-act="ntcTo" data-id="${p.id}">שליחת הודעה</button>` : ''}
+          ${p.role === 'cleaner' && F('deposit') ? `<button class="btn xs ${p.is_verified ? 'ghost' : 'lagoon'}" data-act="verify" data-id="${p.id}" data-v="${p.is_verified ? '' : 1}">${p.is_verified ? 'ביטול אימות' : 'סמן כמאומת'}</button>` : ''}
+          ${sup && !p.is_super ? `<button class="btn xs ghost" data-act="userBlock" data-id="${p.id}" data-on="${p.blocked_at ? '' : 1}">${p.blocked_at ? 'ביטול החסימה' : 'חסימה'}</button>
+            <button class="btn xs ghost" style="color:#B42318" data-act="userDelete" data-id="${p.id}">מחיקה</button>` : ''}</div></div></div>`).join('')}</div>`;
+  },
+  userForm(p){
+    const sup = !!S.profile?.is_super, roles = ['pending','host','cleaner', ...(sup || p?.role === 'admin' ? ['admin'] : [])];
+    if (!p) return `<h2>הוספת משתמש</h2><p class="muted small" style="margin:-4px 0 12px">החשבון נפתח מראש. כשהמשתמש יתחבר עם Google באותו מייל, הוא ייכנס ישר לתפקיד שבחרת, בלי טופס הרשמה.</p>
+      <form data-submit="userCreate"><label class="f"><span>מייל (Gmail)</span><input class="inp" name="email" type="email" required dir="ltr" autocomplete="off"></label>
+      <div class="grid2"><label class="f"><span>שם מלא</span><input class="inp" name="full_name" required></label><label class="f"><span>טלפון</span><input class="inp" name="phone" type="tel" dir="ltr"></label></div>
+      <label class="f"><span>תפקיד</span><select class="inp" name="role"><option value="host">ועד בית</option><option value="cleaner">מנקה</option>${sup ? '<option value="admin">מנהל</option>' : ''}</select></label>
+      <div class="row"><button class="btn lagoon" type="submit" style="flex:1">הוספה</button><button class="btn ghost sm" type="button" data-act="closeModal" data-force="1">ביטול</button></div></form>`;
+    return `<h2>עריכת משתמש</h2><p class="muted small" style="margin:-4px 0 12px">${esc(p.email || '')}</p><form data-submit="userSave" data-id="${p.id}">
+      <div class="grid2"><label class="f"><span>שם מלא</span><input class="inp" name="full_name" value="${esc(p.full_name || '')}"></label><label class="f"><span>טלפון</span><input class="inp" name="phone" type="tel" dir="ltr" value="${esc(p.phone || '')}"></label></div>
+      <div class="grid2"><label class="f"><span>תפקיד</span><select class="inp" name="role" ${p.is_super ? 'disabled' : ''}>${roles.map(r => `<option value="${r}" ${p.role === r ? 'selected' : ''}>${ROLE_HE[r]}</option>`).join('')}</select></label>
+      <label class="f"><span>סטטוס</span><select class="inp" name="status" ${p.is_super ? 'disabled' : ''}>${[['approved','מאושר'], ['submitted','ממתין לאישור'], ['new','באמצע הרשמה'], ['rejected','נדחה']].map(([v, l]) => `<option value="${v}" ${p.status === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
+      ${p.role === 'cleaner' ? `<label class="f"><span>אזור</span><input class="inp" name="area" value="${esc(p.area || '')}"></label>
+      <label class="f"><span>פרטי תשלום</span><input class="inp" name="payment_info" value="${esc(p.payment_info || '')}"></label>
+      <label class="f"><span>כמה מילים על המנקה</span><textarea class="inp" name="bio">${esc(p.bio || '')}</textarea></label>
+      <div class="row" style="margin-bottom:12px"><label class="row"><input type="checkbox" name="is_verified" ${p.is_verified ? 'checked' : ''}> מנקה מאומת/ת</label></div>` : ''}
+      <div class="row"><button class="btn lagoon" type="submit" style="flex:1">שמירה</button><button class="btn ghost sm" type="button" data-act="closeModal" data-force="1">ביטול</button></div></form>`;
+  },
+  msg(){
+    const d = S.data, pre = S.ntcPre || {}, bs = d.aps.filter(a => a.kind === 'building' && !a.deleted_at), users = d.profiles.filter(p => p.role !== 'admin');
+    const aud = pre.audience || 'committee';
+    const target = n => n.audience === 'user' ? esc(this.name(n.user_id)) : AUD_HE[n.audience] + (n.building_id ? ' · ' + esc(bs.find(b => b.id === n.building_id)?.address || 'בניין') : '');
+    return `<h2 style="font-size:22px;font-weight:800">הודעות</h2><p class="muted" style="margin:4px 0 14px">ההודעה מופיעה בראש המסך אצל מי שבחרת, עד שהוא לוחץ ״הבנתי״. הודעה לדיירים מופיעה בדף הבניין.</p>
+      <form class="card" data-submit="ntcSend">
+        <div class="grid2"><label class="f"><span>למי</span><select class="inp" name="audience" data-change="ntcAud">${Object.entries(AUD_HE).map(([v, l]) => `<option value="${v}" ${aud === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+        <label class="f"><span>סוג</span><select class="inp" name="kind">${Object.entries(KIND_HE).map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select></label></div>
+        <label class="f" id="ntcBld" ${aud === 'user' || aud === 'members' ? 'hidden' : ''}><span>בניין</span><select class="inp" name="building_id"><option value="">כל הבניינים</option>${bs.map(b => `<option value="${b.id}">${esc(b.address)}</option>`).join('')}</select></label>
+        <label class="f" id="ntcUser" ${aud === 'user' ? '' : 'hidden'}><span>משתמש</span><select class="inp" name="user_id">${users.map(u => `<option value="${u.id}" ${pre.user_id === u.id ? 'selected' : ''}>${esc(u.full_name || u.email)} · ${ROLE_HE[u.role] || ''}</option>`).join('')}</select></label>
+        <label class="f"><span>כותרת</span><input class="inp" name="title" required maxlength="120"></label>
+        <label class="f"><span>תוכן</span><textarea class="inp" name="body" maxlength="1500"></textarea></label>
+        <label class="f"><span>להציג עד</span><select class="inp" name="expires"><option value="">עד שאסיר אותה</option><option value="7">שבוע</option><option value="30">חודש</option></select></label>
+        <button class="btn lagoon" type="submit">שליחה</button></form>
+      <div class="sec-h" style="margin-top:18px"><h2>הודעות שנשלחו</h2><span class="muted">${d.notices.length}</span></div>
+      ${d.notices.map(n => `<div class="card" style="${n.active ? '' : 'opacity:.6'}"><div class="row between" style="align-items:flex-start"><div><h3 style="font-size:16px;font-weight:700">${esc(n.title)}</h3>
+          <p class="muted small">${KIND_HE[n.kind]} · ${target(n)} · ${fmtShort(ilDate(n.created_at))}${n.audience !== 'residents' ? ` · נקראה ע״י ${n.reads || 0}` : ''}${n.active ? '' : ' · מוסתרת'}</p></div></div>
+        ${n.body ? `<p style="margin-top:6px">${esc(n.body)}</p>` : ''}
+        <div class="row" style="margin-top:10px;gap:8px"><button class="btn xs ghost" data-act="ntcToggle" data-id="${n.id}">${n.active ? 'הסתרה' : 'הצגה מחדש'}</button><button class="btn xs ghost" style="color:#B42318" data-act="ntcDel" data-id="${n.id}">מחיקה</button></div></div>`).join('') || '<p class="muted">עוד לא נשלחו הודעות.</p>'}
+      ${S.profile?.is_super ? `<div class="sec-h" style="margin-top:18px"><h2>יומן פעולות מנהל</h2></div><div class="card"><ul class="rows">${(d.audit || []).map(a => `<li class="rowi"><span class="mid"><b>${({impersonate:'כניסה כמשתמש', create_user:'הוספת משתמש', block:'חסימה', unblock:'ביטול חסימה', delete_user:'מחיקת משתמש'})[a.action] || esc(a.action)}</b><span>${esc(a.detail?.name || a.detail?.email || this.name(a.target_user))}</span></span><span class="end small muted">${fmtShort(ilDate(a.created_at))}, ${fmtTime(a.created_at)}</span></li>`).join('') || '<li class="muted">אין עדיין פעולות.</li>'}</ul></div>` : ''}`;
   },
   apts(){
     const d = {...S.data, aps:S.data.aps.filter(a => a.kind !== 'building')};
@@ -2062,6 +2226,7 @@ const ACT = {
   },
   async signout(){
     S.modal = null; S.lb = null; S.taskId = null; S.tab = {}; S.data = {}; S.ob = {step:0, answers:{}};
+    if (IMP) return ACT.impExit();
     if (DEMO) { location.href = location.pathname; return; }
     try { await sb.auth.signOut(); } catch {}
     if (liveCh) { try { sb.removeChannel(liveCh); } catch {} liveCh = null; }
@@ -2367,7 +2532,46 @@ const ACT = {
   },
   aptForm(el){ const a = el.dataset.id ? S.data.aps.find(x => x.id === el.dataset.id) : {}; S.modal = V.admin.aptForm(a); paint(); }
 };
+Object.assign(ACT, {
+  async impersonate(el){
+    const w = window.open('', '_blank');
+    try {
+      const r = await api.adminTools({action:'impersonate', user_id:el.dataset.id});
+      let url;
+      if (DEMO) url = `./?demo&imp=1&as=${({host:'committee', cleaner:'cleaner', admin:'admin', pending:'new'})[r.role] || 'committee'}&name=${encodeURIComponent(r.name || '')}`;
+      else { localStorage.setItem('ce_imp_handoff', JSON.stringify({token_hash:r.token_hash, name:r.name, ts:Date.now()})); url = './?imp=1'; }
+      if (w) w.location.href = url; else location.href = url;
+    } catch (e) { w?.close(); toast(e.message, 'err'); }
+  },
+  async impExit(){
+    try { if (!DEMO && sb) await sb.auth.signOut({scope:'local'}); } catch {}
+    try { sessionStorage.removeItem('ce_imp'); sessionStorage.removeItem('ce-imp-auth'); } catch {}
+    window.close();
+    setTimeout(() => { location.href = location.pathname + (DEMO ? '?demo&as=admin' : ''); }, 250);
+  },
+  async ntcRead(el){
+    const id = el.dataset.id; S.notices = (S.notices || []).filter(n => n.id !== id); paint();
+    try { await api.noticeRead(id); } catch {}
+  },
+  userNew(){ S.modal = V.admin.userForm(null); paint(); },
+  userEdit(el){ S.modal = V.admin.userForm(S.data.profiles.find(p => p.id === el.dataset.id)); paint(); },
+  ntcTo(el){ S.ntcPre = {audience:'user', user_id:el.dataset.id}; S.tab.a = 'msg'; scrollTo(0, 0); paint(); },
+  async userBlock(el){
+    const on = !!el.dataset.on, p = S.data.profiles.find(x => x.id === el.dataset.id);
+    if (!DEMO && !confirm(on ? `לחסום את ${p.full_name || p.email}? הוא לא יוכל להתחבר עד שתבטל את החסימה.` : `לבטל את החסימה של ${p.full_name || p.email}?`)) return;
+    try { await api.adminTools({action:'block', user_id:p.id, on}); toast(on ? 'המשתמש נחסם' : 'החסימה בוטלה'); await refresh(true); } catch (e) { toast(e.message, 'err'); }
+  },
+  async userDelete(el){
+    const p = S.data.profiles.find(x => x.id === el.dataset.id);
+    if (!DEMO && !confirm(`למחוק את ${p.full_name || p.email} לצמיתות?\nאי אפשר לבטל מחיקה. אם יש לו היסטוריה במערכת, תוצע חסימה במקום.`)) return;
+    try { await api.adminTools({action:'delete_user', user_id:p.id}); toast('המשתמש נמחק'); await refresh(true); }
+    catch (e) { toast(e.message, 'err'); }
+  },
+  async ntcToggle(el){ const n = S.data.notices.find(x => x.id === el.dataset.id); try { await api.noticeUpd(n.id, {active:!n.active}); await refresh(true); } catch (e) { toast(e.message, 'err'); } },
+  async ntcDel(el){ if (!DEMO && !confirm('למחוק את ההודעה? היא תיעלם אצל כולם.')) return; try { await api.noticeDel(el.dataset.id); toast('ההודעה נמחקה'); await refresh(true); } catch (e) { toast(e.message, 'err'); } }
+});
 const CHG = {
+  ntcAud(el){ const v = el.value; document.getElementById('ntcBld').hidden = v === 'user' || v === 'members'; document.getElementById('ntcUser').hidden = v !== 'user'; },
   demoRole(el){ D.cur = el.value; S.tab = {}; S.taskId = null; S.ob = {step:0, answers:{}}; boot(); },
   async photo(el){
     const f = el.files?.[0]; if (!f) return;
@@ -2412,6 +2616,29 @@ const CHG = {
     await run(async () => { await api.rpc('admin_set_verified', {p_user:p.id, p_verified:el.value === 'paid' ? true : el.value === 'refunded' ? false : p.is_verified, p_deposit_status:el.value}); await refresh(true); }, 'עודכן'); }
 };
 const SUB = {
+  async userCreate(f){
+    const v = Object.fromEntries(new FormData(f));
+    try { await api.adminTools({action:'create_user', email:v.email.trim(), full_name:v.full_name.trim(), phone:v.phone.trim(), role:v.role});
+      S.modal = null; toast('המשתמש נוסף. כשיתחבר עם Google באותו מייל, הוא ייכנס ישר.'); await refresh(true); }
+    catch (e) { toast(e.message, 'err'); }
+  },
+  async userSave(f){
+    const v = Object.fromEntries(new FormData(f)), p = S.data.profiles.find(x => x.id === f.dataset.id);
+    const patch = {full_name:(v.full_name || '').trim() || null, phone:(v.phone || '').trim() || null};
+    if (!p.is_super) Object.assign(patch, {role:v.role, status:v.status});
+    if (p.role === 'cleaner') Object.assign(patch, {area:v.area || null, payment_info:v.payment_info || null, bio:v.bio || null, is_verified:!!v.is_verified});
+    if (patch.role === 'host' && !p.onboarding?.kind) patch.onboarding = {...(p.onboarding || {}), kind:'committee'};
+    try { await api.profileUpd(p.id, patch); S.modal = null; toast('נשמר'); await refresh(true); }
+    catch (e) { toast(/only super/.test(e.message) ? 'רק סופר אדמין יכול לשנות תפקיד מנהל.' : e.message, 'err'); }
+  },
+  async ntcSend(f){
+    const v = Object.fromEntries(new FormData(f));
+    const row = {audience:v.audience, kind:v.kind, title:v.title.trim(), body:(v.body || '').trim(),
+      building_id:['committee','cleaner','residents'].includes(v.audience) && v.building_id ? v.building_id : null,
+      user_id:v.audience === 'user' ? v.user_id : null, expires_at:v.expires ? new Date(Date.now() + v.expires * 864e5).toISOString() : null};
+    if (row.audience === 'user' && !row.user_id) return toast('בחרו משתמש', 'err');
+    try { await api.noticeAdd(row); S.ntcPre = null; toast('ההודעה נשלחה'); await refresh(true); } catch (e) { toast(e.message, 'err'); }
+  },
   async email(f){
     const email = f.email.value.trim();
     if (f.dataset.role) localStorage.setItem('ce_role', f.dataset.role);
@@ -2549,6 +2776,12 @@ document.addEventListener('click', e => {
   e.preventDefault(); f(el, e);
 });
 document.addEventListener('change', e => { const f = CHG[e.target.dataset.change]; if (f) f(e.target, e); });
+function filterUsers(){
+  const q = (document.getElementById('uq')?.value || '').trim().toLowerCase(), r = document.getElementById('ur')?.value || '';
+  document.querySelectorAll('#userList > .person').forEach(el => { el.hidden = (q && !el.dataset.q.includes(q)) || (r && el.dataset.role !== r); });
+}
+document.addEventListener('input', e => { if (e.target.dataset.filter) return filterUsers(); });
+document.addEventListener('change', e => { if (e.target.dataset.filter) filterUsers(); });
 document.addEventListener('input', e => { const b = e.target.dataset.bind; if (b) setPath(b, e.target.type === 'checkbox' ? e.target.checked : e.target.value); });
 document.addEventListener('submit', e => { const f = SUB[e.target.dataset.submit]; if (f) { e.preventDefault(); f(e.target); } });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && (S.modal || S.lb)) { S.modal = null; S.lb = null; askResolve?.(null); paint(); } });
@@ -2557,6 +2790,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape' && (S.modal |
 function route(){
   const p = S.profile;
   if (!p) return show(V.landing);
+  if (p.blocked_at && !IMP) return show(V.blocked);
   if (p.role === 'admin') return show(V.admin);
   if (p.status !== 'approved' || p.role === 'pending') return show(V.onboarding);
   if (p.role === 'cleaner') return show(V.cleaner);
@@ -2587,21 +2821,30 @@ async function boot(){
   }
   if (qs.get('view') === 'nfc-writer') S.tab.a = 'nfc';
   try {
-    if (DEMO) { if (!D.tasks) { D.init(); if (['committee','host','admin','new'].includes(qs.get('as'))) D.cur = qs.get('as'); } S.cfg = D.settings; S.profile = D.me(); route(); setTimeout(() => INST.maybe(), 1200); return; }
+    if (DEMO) { if (!D.tasks) { D.init(); if (['committee','host','admin','new'].includes(qs.get('as'))) D.cur = qs.get('as'); } S.cfg = D.settings; S.profile = D.me(); await loadNotices(); route(); if (!IMP) setTimeout(() => INST.maybe(), 1200); return; }
     if (!window.supabase) { S.profile = null; route(); return toast('לא הצלחנו להתחבר לשרת. בדקו את החיבור לאינטרנט.', 'err'); }
     if (!sb) {
-      sb = supabase.createClient(CFG.url, CFG.key, {auth:{persistSession:true, detectSessionInUrl:true, flowType:'pkce'}});
+      sb = supabase.createClient(CFG.url, CFG.key, IMP
+        ? {auth:{storage:sessionStorage, storageKey:'ce-imp-auth', persistSession:true, detectSessionInUrl:false, autoRefreshToken:true}}
+        : {auth:{persistSession:true, detectSessionInUrl:true, flowType:'pkce'}});
       sb.auth.onAuthStateChange((ev, session) => {
         const id = session?.user?.id || null;
         if ((S.profile?.id || null) !== id && ev !== 'INITIAL_SESSION') setTimeout(boot, 0);
       });
     }
+    if (IMP?.token) {
+      const tok = IMP.token; IMP.token = null; sessionStorage.setItem('ce_imp', JSON.stringify(IMP));
+      history.replaceState(null, '', location.pathname);
+      const {error} = await sb.auth.verifyOtp({token_hash:tok, type:'magiclink'});
+      if (error) toast('הכניסה בשם המשתמש נכשלה: ' + error.message, 'err');
+    }
     const errDesc = qs.get('error_description') || new URLSearchParams(location.hash.slice(1)).get('error_description');
     if (errDesc) { toast('ההתחברות נכשלה: ' + errDesc, 'err'); history.replaceState(null, '', location.pathname); }
     try { S.cfg = await q(sb.from('settings').select('*').eq('id', 1).single()); } catch { S.cfg = {}; }
     S.profile = await api.me();
+    await loadNotices();
     if (location.search.includes('code=')) history.replaceState(null, '', location.pathname + (qs.has('demo') ? '?demo' : ''));
-    route(); live(); setTimeout(() => INST.maybe(), 1200);
+    route(); live(); if (!IMP) setTimeout(() => INST.maybe(), 1200);
   } catch (e) { console.error(e); toast(e.message, 'err'); S.profile = null; route(); }
 }
 
