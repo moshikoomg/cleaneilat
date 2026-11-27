@@ -3,11 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>CleanEilat · ועד בית דיגיטלי ושקיפות לבנייני מגורים</title>
+<title>ועדלי · ועד בית דיגיטלי ושקיפות לבנייני מגורים</title>
 <meta name="description" content="ועד בית דיגיטלי ושקיפות לדיירים: מתי ניקו את הבניין ועם אילו תמונות, הקבלות של הבניין והצעות מחיר מספקים, במקום אחד. חינם לוועדי בית באילת.">
 <meta name="theme-color" content="#ECEEF1">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2313293D'/%3E%3Cpath d='M14 40c8-6 14-6 18 0s10 6 18 0' stroke='%2363C5C0' stroke-width='5' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='32' cy='22' r='7' fill='%23F5F7F6'/%3E%3C/svg%3E">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="ועדלי">
+<meta name="application-name" content="ועדלי">
+<meta name="mobile-web-app-capable" content="yes">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -86,7 +92,7 @@ textarea.inp{min-height:90px;resize:vertical;padding-top:14px}
 .top{position:sticky;top:0;z-index:20;background:rgba(236,238,241,.9);backdrop-filter:blur(12px)}
 .top-in{display:flex;align-items:center;gap:10px;max-width:1120px;margin:0 auto;padding:12px 16px}
 .brand{display:flex;align-items:center;gap:8px;font-weight:700;font-size:17px;color:var(--ink);text-decoration:none;letter-spacing:-.2px}
-.brand i{display:block;width:30px;height:30px;border-radius:50%;background:var(--lime) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M8 19c3-3 5.5-3 8 0s5 3 8 0' stroke='%231F3B17' stroke-width='2.6' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='16' cy='11.5' r='3.2' fill='%231F3B17'/%3E%3C/svg%3E") center/100% no-repeat}
+.brand i{display:block;width:32px;height:32px;background:url("icons/icon-192.png") center/100% no-repeat}
 .top .sp{flex:1}
 .who{display:flex;align-items:center;gap:10px;border:0;background:none;padding:0;text-align:right}
 .who b{display:block;font-size:17px;font-weight:600}
@@ -279,6 +285,12 @@ textarea.inp{min-height:90px;resize:vertical;padding-top:14px}
 @keyframes fd{from{opacity:0}}
 .toast{position:fixed;z-index:60;left:50%;bottom:calc(96px + var(--safe-b));transform:translateX(-50%);background:var(--forest);color:#fff;padding:12px 20px;border-radius:999px;font-weight:500;box-shadow:0 12px 30px -10px rgba(0,0,0,.4);max-width:calc(100vw - 32px);animation:up .2s}
 .toast.err{background:var(--red)}
+.inst{position:fixed;z-index:45;left:50%;bottom:calc(84px + var(--safe-b));transform:translateX(-50%);width:min(460px,calc(100% - 24px));background:#fff;border-radius:24px;padding:16px;box-shadow:0 18px 40px -14px rgba(20,23,28,.4);display:flex;gap:12px;align-items:flex-start;animation:up .25s}
+.inst img{width:52px;height:52px;flex:none}
+.inst b{display:block;font-size:16px;margin-bottom:2px}
+.inst p{margin:0 0 12px;color:var(--ink2);font-size:14px;line-height:1.45}
+.inst .row{gap:8px;margin:0}
+.inst.low{bottom:calc(16px + var(--safe-b))}
 .lb{position:fixed;inset:0;z-index:70;background:rgba(10,12,14,.92);display:grid;place-items:center;padding:16px}
 .lb img{max-height:88vh;border-radius:16px}
 .loading{display:grid;place-items:center;min-height:60vh}
@@ -925,7 +937,7 @@ function topbar(){
     ${p ? `<button class="who" data-act="account" aria-label="חשבון">
       <span class="av">${p.avatar_url ? `<img src="${esc(p.avatar_url)}" alt="">` : initials(p.full_name || p.email)}</span>
       <span><b>${p.full_name ? 'שלום, ' + esc(first(p.full_name)) : 'ברוך הבא'}</b><small>${roleName}</small></span></button>`
-      : `<a class="brand" href="#" data-act="home"><i aria-hidden="true"></i>CleanEilat</a>`}
+      : `<a class="brand" href="#" data-act="home"><i aria-hidden="true"></i>ועדלי</a>`}
     <span class="sp"></span>
     ${DEMO ? `<label class="sr" for="demoSw">החלף תצוגה בהדגמה</label><select id="demoSw" class="demo-sw" data-change="demoRole">
       ${[['cleaner','הדגמה: מנקה'], ['admin','הדגמה: מנהל'], ['committee','הדגמה: ועד בית'], ['new','הדגמה: נרשם חדש']].map(([v, l]) => `<option value="${v}" ${D.cur === v ? 'selected' : ''}>${l}</option>`).join('')}
@@ -962,7 +974,7 @@ V.landing = {
       [ICON.coins,'הצעות מחיר במקום אחד','הצעות מספקים לניקיון, מעליות, גינון ותחזוקה, כולל הצעות קבוצתיות מוזלות דרך Sponja.'],
       [ICON.wallet,'קבלות פתוחות לכולם','הקבלות של הבניין זמינות לכל דייר, בלי לבקש ובלי לחכות.']];
     return `<div class="lp">
-    <div class="lp-top"><span class="brand"><i aria-hidden="true"></i>CleanEilat</span></div>
+    <div class="lp-top"><span class="brand"><i aria-hidden="true"></i>ועדלי</span></div>
     ${lpSeg()}
     <div class="lp-grid">
       <section class="card hero-card">
@@ -997,7 +1009,7 @@ V.landing = {
       <p class="muted" style="margin:6px 0 18px">אין צורך שכל הוועד יירשם. מספיק אחד, והדיירים רק נכנסים לקישור.</p>
       <div style="max-width:420px;margin:0 auto">${authBlock('committee')}</div>
     </section>
-    <footer class="lp-foot">CleanEilat היא פלטפורמה טכנולוגית שמחברת בין ועדי בית ודיירים לבין נותני שירות עצמאיים. ההתקשרות והתשלום הם ישירות ביניהם.<br><a href="terms.html">תנאי שימוש</a> · <a href="privacy.html">מדיניות פרטיות</a></footer>
+    <footer class="lp-foot">ועדלי היא פלטפורמה טכנולוגית שמחברת בין ועדי בית ודיירים לבין נותני שירות עצמאיים. ההתקשרות והתשלום הם ישירות ביניהם.<br><a href="terms.html">תנאי שימוש</a> · <a href="privacy.html">מדיניות פרטיות</a></footer>
   </div>`;
   },
   html(){
@@ -1008,7 +1020,7 @@ V.landing = {
       [ICON.wallet,'בלי עמלה','ועד הבית משלם לך ישירות, במחיר שסיכמתם. אנחנו לא לוקחים אחוזים מהעבודה.'],
       [ICON.cam,'התיעוד מדבר בשבילך','4 תמונות בסוף כל ניקיון. הדיירים רואים שהעבודה נעשתה, בלי ויכוחים.']];
     return `<div class="lp">
-    <div class="lp-top"><span class="brand"><i aria-hidden="true"></i>CleanEilat</span></div>
+    <div class="lp-top"><span class="brand"><i aria-hidden="true"></i>ועדלי</span></div>
     ${lpSeg()}
     <div class="lp-grid">
       <section class="card hero-card">
@@ -1042,7 +1054,7 @@ V.landing = {
       <p class="muted" style="margin:6px 0 18px">המנקים הראשונים ברשימה הם הראשונים שוועדי הבית רואים.</p>
       <div style="max-width:420px;margin:0 auto">${authBlock('cleaner')}</div>
     </section>
-    <footer class="lp-foot">CleanEilat היא פלטפורמה טכנולוגית שמחברת בין ועדי בית ודיירים לבין נותני שירות עצמאיים. ההתקשרות והתשלום הם ישירות ביניהם.<br><a href="terms.html">תנאי שימוש</a> · <a href="privacy.html">מדיניות פרטיות</a></footer>
+    <footer class="lp-foot">ועדלי היא פלטפורמה טכנולוגית שמחברת בין ועדי בית ודיירים לבין נותני שירות עצמאיים. ההתקשרות והתשלום הם ישירות ביניהם.<br><a href="terms.html">תנאי שימוש</a> · <a href="privacy.html">מדיניות פרטיות</a></footer>
   </div>`;
   }
 };
@@ -1084,7 +1096,7 @@ V.onboarding = {
         <li>בודקים את תעודת הזהות ואישור העוסק.</li><li>אחרי האישור, הפרופיל שלך מופיע לוועדי הבית.</li><li>הכניסה הבאה נפתחת ישר למסך העבודות.</li></ul></section>
       <button class="btn ghost" style="margin-top:12px;background:#fff;box-shadow:none" data-act="recheck">בדיקה אם אושרתי</button></main>`;
     if (!o.role) return topbar() + `<main class="shell">
-      <div class="hello"><h1>איך תשתמש/י ב-CleanEilat?</h1><p>אפשר לשנות אחר כך דרך התמיכה.</p></div>
+      <div class="hello"><h1>איך תשתמש/י בוועדלי?</h1><p>אפשר לשנות אחר כך דרך התמיכה.</p></div>
       <button class="card" style="width:100%;text-align:right;border:0;margin-bottom:12px" data-act="obRole" data-v="committee"><div class="card-h"><h3>${ICON.key} אני בוועד הבית</h3></div><p class="muted">דף שקוף לדיירים: ניקיונות עם תמונות, קבלות והצעות מחיר. חינם.</p></button>
       <button class="card" style="width:100%;text-align:right;border:0" data-act="obRole" data-v="cleaner"><div class="card-h"><h3>${ICON.broom} אני מנקה עצמאי/ת</h3></div><p class="muted">ניקיון ותחזוקה של בנייני מגורים. ועדי בית פונים אליך, והתשלום ישירות אליך.</p></button></main>`;
     const basics = `<label class="f"><span>שם מלא</span><input class="inp" data-bind="ob.full_name" value="${esc(o.full_name)}" autocomplete="name" required></label>
@@ -1291,7 +1303,7 @@ V.cleaner = {
         <div class="big num" style="margin:6px 0 4px">${money(e.total)}</div>
         <div class="mini"><div><span>סומן ששולם</span><b class="num">${money(e.paid)}</b></div><div><span>עוד לא שולם</span><b class="num">${money(e.unpaid)}</b></div></div>
       </section>
-      <div class="alert info">התשלום מגיע ישירות מהוועד, לפי פרטי התשלום שבפרופיל שלך. CleanEilat לא מחזיקה את הכסף ולא לוקחת עמלה. את הקבלה מוציאים לוועד בעצמך.</div>
+      <div class="alert info">התשלום מגיע ישירות מהוועד, לפי פרטי התשלום שבפרופיל שלך. ועדלי לא מחזיקה את הכסף ולא לוקחת עמלה. את הקבלה מוציאים לוועד בעצמך.</div>
       <section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.check} ניקיונות שאושרו</h3></div>
         ${h.length ? `<ul class="rows">${h.map(t => `<li class="rowi"><span class="ic ${t.paid_at ? 'lime' : 'orange'}">${t.paid_at ? ICON.check : ICON.clock}</span>
           <span class="mid"><b>${esc(t.apartment?.name)}</b><span>${fmtShort(t.task_date)}${t.rating ? ` · ${'★'.repeat(t.rating)}` : ''}${t.paid_at ? ' · שולם' : ' · לא שולם עדיין'}</span></span>
@@ -1422,7 +1434,7 @@ V.host = {
       <section class="card" style="margin-top:12px"><div class="card-h"><h3>${ICON.check} איך זה עובד</h3></div><ul class="perks" style="margin:0">
         <li>המנקים הם עצמאיים. את/ה בוחר/ת עם מי לעבוד, והם קובעים את המחיר.</li>
         <li>התשלום עובר ממך ישירות למנקה, והוא/היא מוציא/ה לך קבלה.</li>
-        <li>CleanEilat מספקת את התוכנה: סנכרון יומן, תיעוד ותמונות.</li></ul></section>
+        <li>ועדלי מספקת את התוכנה: סנכרון יומן, תיעוד ותמונות.</li></ul></section>
       <div class="row" style="margin-top:12px"><a class="btn ghost sm" style="background:#fff" href="terms.html">תנאי שימוש</a><button class="btn ghost sm" style="background:#fff" data-act="signout">יציאה מהחשבון</button></div>`;
   },
   aptForm(a = {}){
@@ -1645,7 +1657,7 @@ V.building = {
   html(){
     const P = S.pub || {}, b = P.data;
     const shell = inner => `<div class="lp" style="max-width:560px">
-      <div class="lp-top"><span class="brand"><i aria-hidden="true"></i>CleanEilat</span></div>${inner}
+      <div class="lp-top"><span class="brand"><i aria-hidden="true"></i>ועדלי</span></div>${inner}
       <a class="card" href="./?for=cleaner" style="display:block;margin-top:12px;text-align:center;text-decoration:none;color:inherit">
         <b>המנקה או איש התחזוקה של הבניין?</b><br><span class="muted">לחצו כאן לדיווח הגעה וחיבור חינם</span></a>
       <footer class="lp-foot"><a href="terms.html">תנאי שימוש</a> · <a href="privacy.html">מדיניות פרטיות</a></footer></div>`;
@@ -1757,7 +1769,7 @@ V.supplier = {
   },
   html(){
     const P = S.sup || {}, i = P.info;
-    const shell = inner => `<div class="lp" style="max-width:520px"><div class="lp-top"><span class="brand"><i aria-hidden="true"></i>CleanEilat</span></div>${inner}
+    const shell = inner => `<div class="lp" style="max-width:520px"><div class="lp-top"><span class="brand"><i aria-hidden="true"></i>ועדלי</span></div>${inner}
       <footer class="lp-foot"><a href="terms.html">תנאי שימוש</a> · <a href="privacy.html">מדיניות פרטיות</a></footer></div>`;
     if (P.loading) return shell(`<section class="card" style="text-align:center;padding:40px 20px"><div class="spin" style="margin:0 auto"></div></section>`);
     if (!i) return shell(`<section class="card empty"><h3>הקישור הזה כבר לא פעיל</h3><p>ועד הבית החליף אותו. בקשו מהוועד את הקישור החדש לספקים.</p></section>`);
@@ -2149,8 +2161,8 @@ const ACT = {
   async connResp(el){ const ok = !!el.dataset.ok;
     await run(async () => { await api.rpc('respond_connection', {p_host:el.dataset.id, p_accept:ok}); await refresh(true); }, ok ? 'החיבור אושר' : 'הבקשה נדחתה'); },
   async deposit(){ await run(async () => { await api.rpc('request_deposit_track'); await refresh(true); }, 'הבקשה נשלחה'); },
-  async share(el){ const link = el.dataset.link; const text = 'מצטרפים איתי ל-CleanEilat, עבודה קבועה בניקיון בנייני מגורים באילת: ' + link;
-    if (navigator.share) { try { await navigator.share({title:'CleanEilat', text, url:link}); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
+  async share(el){ const link = el.dataset.link; const text = 'מצטרפים איתי לוועדלי, עבודה קבועה בניקיון בנייני מגורים באילת: ' + link;
+    if (navigator.share) { try { await navigator.share({title:'ועדלי', text, url:link}); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
     try { await navigator.clipboard.writeText(link); toast('הקישור הועתק'); }
     catch { S.modal = `<h2>הקישור האישי שלך</h2><p class="muted" style="margin-bottom:10px">סמנו והעתיקו את הקישור, ושלחו לחברים.</p><input class="inp" dir="ltr" readonly value="${esc(link)}" onclick="this.select()"><button class="btn lagoon" style="margin-top:12px" data-act="closeModal" data-force="1">סגירה</button>`; paint(); } },
 
@@ -2575,7 +2587,7 @@ async function boot(){
   }
   if (qs.get('view') === 'nfc-writer') S.tab.a = 'nfc';
   try {
-    if (DEMO) { if (!D.tasks) { D.init(); if (['committee','host','admin','new'].includes(qs.get('as'))) D.cur = qs.get('as'); } S.cfg = D.settings; S.profile = D.me(); return route(); }
+    if (DEMO) { if (!D.tasks) { D.init(); if (['committee','host','admin','new'].includes(qs.get('as'))) D.cur = qs.get('as'); } S.cfg = D.settings; S.profile = D.me(); route(); setTimeout(() => INST.maybe(), 1200); return; }
     if (!window.supabase) { S.profile = null; route(); return toast('לא הצלחנו להתחבר לשרת. בדקו את החיבור לאינטרנט.', 'err'); }
     if (!sb) {
       sb = supabase.createClient(CFG.url, CFG.key, {auth:{persistSession:true, detectSessionInUrl:true, flowType:'pkce'}});
@@ -2589,9 +2601,43 @@ async function boot(){
     try { S.cfg = await q(sb.from('settings').select('*').eq('id', 1).single()); } catch { S.cfg = {}; }
     S.profile = await api.me();
     if (location.search.includes('code=')) history.replaceState(null, '', location.pathname + (qs.has('demo') ? '?demo' : ''));
-    route(); live();
+    route(); live(); setTimeout(() => INST.maybe(), 1200);
   } catch (e) { console.error(e); toast(e.message, 'err'); S.profile = null; route(); }
 }
+
+/* ═════════════ install to phone (PWA) ═════════════ */
+const INST = {
+  ev:null,
+  standalone(){ return matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; },
+  ios(){ return /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); },
+  snoozed(){ try { return Date.now() - (+localStorage.getItem('ce_inst_snooze') || 0) < 7 * 864e5; } catch { return false; } },
+  hide(){ document.getElementById('instSheet')?.remove(); },
+  maybe(){
+    if (!S.profile || this.standalone() || this.snoozed() || document.getElementById('instSheet')) return;
+    if (!this.ev && !this.ios()) return;
+    const ios = !this.ev;
+    const el = document.createElement('section');
+    el.id = 'instSheet'; el.className = 'inst' + (document.querySelector('.tabs') ? '' : ' low');
+    el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'התקנת ועדלי בטלפון');
+    el.innerHTML = `<img src="icons/icon-192.png" alt="">
+      <div style="flex:1"><b>ועדלי בטלפון</b>
+      <p>${ios ? 'לוחצים על כפתור השיתוף בדפדפן ואז על ״הוספה למסך הבית״. ועדלי יופיע כמו אפליקציה.' : 'מתקינים פעם אחת, וועדלי נפתח מהמסך הראשי כמו אפליקציה.'}</p>
+      <div class="row">${ios ? '' : '<button class="btn sm" data-act="instGo">הורדה לטלפון</button>'}<button class="btn sm ghost" data-act="instLater">${ios ? 'הבנתי' : 'לא עכשיו'}</button></div></div>`;
+    document.body.appendChild(el);
+  }
+};
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); INST.ev = e; INST.maybe(); });
+window.addEventListener('appinstalled', () => { INST.ev = null; INST.hide(); toast('ועדלי הותקן בטלפון'); });
+Object.assign(ACT, {
+  async instGo(){
+    const e = INST.ev; if (!e) return INST.hide();
+    INST.hide(); e.prompt();
+    try { const r = await e.userChoice; if (r.outcome !== 'accepted') localStorage.setItem('ce_inst_snooze', Date.now()); } catch {}
+    INST.ev = null;
+  },
+  instLater(){ try { localStorage.setItem('ce_inst_snooze', Date.now()); } catch {} INST.hide(); }
+});
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 boot();
 </script>
 </body>
